@@ -97,3 +97,31 @@ def creatif(systeme: str, utilisateur: str, max_tokens: int = 400) -> str:
     if not texte or choix.get("finish_reason") == "length":
         raise RuntimeError("réponse vide ou coupée")  # l'appelant retombe sur sa ligne de secours
     return texte
+
+
+def economique(systeme: str, utilisateur: str, max_tokens: int = 2000) -> str:
+    """Texte du modèle économique (listes de courses, vérification d'un gage). Réflexion réduite : sans cela la réponse est vide."""
+    r = _appeler("chat/completions", {
+        "model": config.MODELE_EXTRACTION, "temperature": 0.3, "max_tokens": max_tokens, "provider": {"zdr": True},
+        "reasoning": {"effort": "low"},
+        "messages": [{"role": "system", "content": systeme}, {"role": "user", "content": utilisateur}]}, delai=60)
+    choix = r["choices"][0]
+    texte = (choix["message"].get("content") or "").strip()
+    if not texte or choix.get("finish_reason") == "length":
+        raise RuntimeError("réponse vide ou coupée")
+    return texte
+
+
+def recherche_web(demande: str, max_resultats: int = 3) -> tuple[str, list[str]]:
+    """Réponse du modèle créatif appuyée sur une recherche web, avec les adresses citées.
+    Le ZDR ne couvre pas la recherche : `demande` ne doit contenir aucune donnée personnelle."""
+    r = _appeler("chat/completions", {
+        "model": config.MODELE_CREATIF, "max_tokens": 900, "provider": {"zdr": True}, "reasoning": {"effort": "low"},
+        "plugins": [{"id": "web", "max_results": max_resultats}],
+        "messages": [{"role": "user", "content": demande}]}, delai=120)
+    choix = r["choices"][0]
+    texte = (choix["message"].get("content") or "").strip()
+    if not texte or choix.get("finish_reason") == "length":
+        raise RuntimeError("réponse vide ou coupée")
+    urls = list(dict.fromkeys(a["url_citation"]["url"] for a in (choix["message"].get("annotations") or []) if "url_citation" in a))
+    return texte, urls

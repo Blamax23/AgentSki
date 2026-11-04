@@ -1,7 +1,7 @@
 """Schéma v1. Les heures sont stockées en UTC ; l'affichage et les rappels sont en Europe/Paris."""
 from datetime import date, datetime, timezone
 
-from sqlalchemy import false, Boolean, Date, DateTime, ForeignKey, Integer, MetaData, String, Text, UniqueConstraint
+from sqlalchemy import false, true, Boolean, Date, DateTime, ForeignKey, Integer, MetaData, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -252,3 +252,71 @@ class Replique(Base):
     archive_id: Mapped[int] = mapped_column(ForeignKey("archive.id"))
     texte: Mapped[str] = mapped_column(Text)
     cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Idee(Base):
+    """Boîte à idées de plans (soirées, activités), reprise une fois dans les rappels du matin."""
+    __tablename__ = "idee"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    auteur_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    texte: Mapped[str] = mapped_column(Text)
+    rappelee: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Pari(Base):
+    __tablename__ = "pari"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    auteur_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    texte: Mapped[str] = mapped_column(Text)
+    statut: Mapped[str] = mapped_column(String(10), default="ouvert", server_default="ouvert")  # ouvert | clos
+    gagnant_id: Mapped[int | None] = mapped_column(ForeignKey("personne.id"))
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Plat(Base):
+    """Un plat de la liste de courses du week-end, avec ses précisions (« raclette sans charcuterie »)."""
+    __tablename__ = "plat"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    auteur_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    texte: Mapped[str] = mapped_column(Text)
+    actif: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Element(Base):
+    """Réserve des défis : une phrase, un gage, un plat, une question... Les auteurs restent anonymes."""
+    __tablename__ = "element"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    type: Mapped[str] = mapped_column(String(12))
+    auteur_id: Mapped[int | None] = mapped_column(ForeignKey("personne.id"))  # None : inventé par le bot
+    texte: Mapped[str] = mapped_column(Text)
+    utilise: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Defi(Base):
+    __tablename__ = "defi"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    type: Mapped[str] = mapped_column(String(12))
+    journee_id: Mapped[int | None] = mapped_column(ForeignKey("journee.id"))
+    tire_id: Mapped[int | None] = mapped_column(ForeignKey("personne.id"))
+    contenu: Mapped[str] = mapped_column(Text)
+    etat: Mapped[str] = mapped_column(String(10), default="en_cours", server_default="en_cours")
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class DefiVote(Base):
+    """Validation d'un défi : vote, note ou réponse d'une personne (une seule par défi)."""
+    __tablename__ = "defi_vote"
+    __table_args__ = (UniqueConstraint("defi_id", "personne_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    defi_id: Mapped[int] = mapped_column(ForeignKey("defi.id"))
+    personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    valeur: Mapped[int] = mapped_column(Integer)

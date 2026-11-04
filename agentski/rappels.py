@@ -297,6 +297,10 @@ def texte_matin(session: Session, journee: Journee) -> Message:
               "• GoPro chargées, cartes SD vidées, batteries de rechange.",
               f"• {_conseil_pov(session, presents)}",
               "• Activité ski lancée sur la Garmin."]
+    from .plans import idees_pour_rappel
+    idees = idees_pour_rappel(session)
+    if idees:
+        lignes += ["", "💡 Idées de la boîte :"] + [f"• {i}" for i in idees]
     for p in _premieres_venues(session, journee):
         if p.prenom != config.ORGANISATEUR:
             lignes.append(f"• Première venue {_de(p.prenom)} : relever ses repères (chrono sur une piste repère, note sur 10).")

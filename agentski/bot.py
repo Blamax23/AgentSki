@@ -12,7 +12,7 @@ from telegram.ext import (Application, ApplicationHandlerStop, CallbackQueryHand
 
 from sqlalchemy import select
 
-from . import acces, amis, audio, commandes, config, entretien, fun, ia, journal, rappels, simulation
+from . import acces, amis, audio, commandes, config, entretien, fun, ia, jeux, journal, rappels, simulation
 from .db import SessionLocal, seed_personnes, sync_allowed_users
 from .models import Personne
 
@@ -253,6 +253,7 @@ def main() -> None:
     app.add_handler(TypeHandler(Update, liste_blanche), group=-1)
     commandes.installer(app)
     fun.installer(app)
+    jeux.installer(app)
     simulation.installer(app)  # fausses commandes, à retirer au gel de l'étape 4
     app.add_handler(CallbackQueryHandler(bouton_jeudi, pattern=r"^j\|"))
     app.add_handler(CallbackQueryHandler(bouton_entretien, pattern=r"^e\|"))

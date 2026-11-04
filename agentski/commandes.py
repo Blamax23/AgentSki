@@ -10,6 +10,10 @@ AIDE = ("Voilà ce que je sais faire :\n"
         "• /chute [prénom] [verte] : noter une chute (la tienne par défaut)\n"
         "• /easter : ajouter une archive à la réserve de surprises (de préférence en privé)\n"
         "• /chambre [prénom] : une archive tout de suite\n"
+        "• /idee [texte] : la boîte à idées de plans ; /suggestion [thème] : des idées trouvées sur le web\n"
+        "• /pari [texte], /paris, /resolu N Prénom : les paris\n"
+        "• /course [plat] : la liste de courses du week-end\n"
+        "• /defi : lancer un défi ; /ajout : alimenter les réserves en privé\n"
         "• /citation [prénom] \"phrase\" : garder une phrase culte\n"
         "• Envoie-moi tes photos et vidéos de moins de 20 Mo, je les range par journée.\n"
         "• Le soir, je te demande ta note sur 10 et une phrase.")
@@ -137,8 +141,8 @@ async def texte_libre(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     """Un texte : réponse à la phrase du soir ou à la capsule si c'est une réponse à ces questions, sinon l'entretien."""
     reponse_a = update.message.reply_to_message.message_id if update.message.reply_to_message else None
     if reponse_a is not None:
-        from . import fun
-        if await fun.description_archive(update, context, reponse_a):
+        from . import fun, jeux
+        if await fun.description_archive(update, context, reponse_a) or await jeux.reponse_ajout(update, context, reponse_a):
             return
         with SessionLocal() as session:
             personne = _personne(session, update)
