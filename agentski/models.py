@@ -1,7 +1,7 @@
 """Schéma v1. Les heures sont stockées en UTC ; l'affichage et les rappels sont en Europe/Paris."""
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, MetaData, String, Text, UniqueConstraint
+from sqlalchemy import false, Boolean, Date, DateTime, ForeignKey, Integer, MetaData, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -26,6 +26,7 @@ class Personne(Base):
     statut: Mapped[str] = mapped_column(String(20), default="ami")
     actif: Mapped[bool] = mapped_column(Boolean, default=True)
     premiere_apparition: Mapped[date | None] = mapped_column(Date)
+    anniversaire: Mapped[date | None] = mapped_column(Date)  # l'année compte peu : seuls le jour et le mois servent
 
 
 class Weekend(Base):
@@ -152,6 +153,7 @@ class Chute(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     journee_id: Mapped[int] = mapped_column(ForeignKey("journee.id"))
     personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    verte: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())  # chute sur une piste verte, pour /verte
     cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
@@ -222,4 +224,31 @@ class Capsule(Base):
     message: Mapped[str | None] = mapped_column(Text)
     message_id: Mapped[int | None] = mapped_column(Integer)  # question du bot en attente de réponse
     revelee_a: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Archive(Base):
+    """Archive d'easter egg : un média de moins de 20 Mo, qui est visé, et une description libre."""
+    __tablename__ = "archive"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    auteur_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    cible_id: Mapped[int | None] = mapped_column(ForeignKey("personne.id"))
+    type: Mapped[str | None] = mapped_column(String(20))
+    file_id: Mapped[str | None] = mapped_column(String(200))
+    taille: Mapped[int | None] = mapped_column(Integer)
+    description: Mapped[str | None] = mapped_column(Text)
+    etape: Mapped[str] = mapped_column(String(12), default="media")  # media | cible | description | ok
+    message_id: Mapped[int | None] = mapped_column(Integer)  # question en attente de réponse
+    nb_envois: Mapped[int] = mapped_column(Integer, default=0)
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Replique(Base):
+    """Ligne improvisée envoyée avec une archive : gardée pour ne jamais répéter la même sur la même archive."""
+    __tablename__ = "replique"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    archive_id: Mapped[int] = mapped_column(ForeignKey("archive.id"))
+    texte: Mapped[str] = mapped_column(Text)
     cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

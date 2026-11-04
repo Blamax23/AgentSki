@@ -83,3 +83,17 @@ def extraire(transcription: str, jour: str, pistes: list[str], periode: str = "b
         "response_format": {"type": "json_schema", "json_schema": {"name": "journal", "strict": True, "schema": _schema()}}},
         delai=120)
     return json.loads(r["choices"][0]["message"]["content"])
+
+
+def creatif(systeme: str, utilisateur: str, max_tokens: int = 400) -> str:
+    """Texte court et libre du modèle créatif (répliques, flash infos, briefing). Toujours en ZDR, sans recherche web.
+    Ce modèle réfléchit obligatoirement : l'effort est réduit, sinon la réflexion épuise les jetons et coupe la réponse."""
+    r = _appeler("chat/completions", {
+        "model": config.MODELE_CREATIF, "temperature": 1.0, "max_tokens": max_tokens, "provider": {"zdr": True},
+        "reasoning": {"effort": "low"},
+        "messages": [{"role": "system", "content": systeme}, {"role": "user", "content": utilisateur}]}, delai=60)
+    choix = r["choices"][0]
+    texte = (choix["message"].get("content") or "").strip()
+    if not texte or choix.get("finish_reason") == "length":
+        raise RuntimeError("réponse vide ou coupée")  # l'appelant retombe sur sa ligne de secours
+    return texte

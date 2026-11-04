@@ -30,6 +30,7 @@ RELANCE_JUSQU_A_H = int(os.environ.get("RELANCE_JUSQU_A_H", "22"))
 # Entretien du soir
 MODELE_TRANSCRIPTION = os.environ.get("MODELE_TRANSCRIPTION", "mistralai/voxtral-small-transcribe-3-0")
 MODELE_EXTRACTION = os.environ.get("MODELE_EXTRACTION", "anthropic/claude-haiku-5.5")
+MODELE_CREATIF = os.environ.get("MODELE_CREATIF", "anthropic/claude-sonnet-5.5")  # easter eggs, flash infos, briefing
 RELANCES_MAX = int(os.environ.get("RELANCES_MAX", "7"))  # la doc prévoit 6 à 8 ; la question des chutes est en plus
 DUREE_MORCEAU_S = int(os.environ.get("DUREE_MORCEAU_S", "50"))  # les fournisseurs coupent à 60 s de traitement
 HEURE_REPRISE = os.environ.get("HEURE_REPRISE", "09:00")
@@ -39,6 +40,12 @@ NEIGES = ["❄️ Poudreuse", "🧊 Dure", "💧 Soupe", "🪨 Tôlée", "🔀 V
 TONS = ["😂 Rigolo", "🤩 Épique", "😌 Tranquille", "😅 Galère", "😬 Tendu"]
 FICHIER_PISTES = ROOT / "donnees" / "pistes.txt"  # pistes de départ, dans le dépôt
 FICHIER_PISTES_APPRISES = ROOT / "data" / "pistes_apprises.txt"  # pistes ajoutées au fil des entretiens
+
+# Surprises : probabilités par journée de ski, et rareté du moniteur blasé
+EASTER_PROBA = float(os.environ.get("EASTER_PROBA", "0.6"))
+FLASH_PROBA = float(os.environ.get("FLASH_PROBA", "0.4"))
+BLASE_UNE_FOIS_SUR = int(os.environ.get("BLASE_UNE_FOIS_SUR", "50"))
+AIDE_NON_UNE_FOIS_SUR = int(os.environ.get("AIDE_NON_UNE_FOIS_SUR", "5"))
 
 # Question d'accès : dans .env, jamais dans le code. Sans réponse configurée, les inconnus sont ignorés.
 QUESTION_ACCES = os.environ.get("QUESTION_ACCES", "")

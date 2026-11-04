@@ -85,7 +85,7 @@ def ajouter_moment(session: Session, auteur: Personne, texte: str) -> str:
     return f"📍 Moment noté à {heure}" + (f" : {texte}" if texte else ".")
 
 
-def ajouter_chute(session: Session, auteur: Personne, cible: str | None) -> str:
+def ajouter_chute(session: Session, auteur: Personne, cible: str | None, verte: bool = False) -> str:
     personne = auteur
     if cible:
         personne = personne_par_prenom(session, cible)
@@ -93,11 +93,11 @@ def ajouter_chute(session: Session, auteur: Personne, cible: str | None) -> str:
             noms = ", ".join(p.prenom for p in session.scalars(select(Personne).order_by(Personne.id)))
             return f"Je ne connais pas « {cible} ». Essaie : {noms}."
     journee = journee_du_jour(session, personne)
-    session.add(Chute(journee_id=journee.id, personne_id=personne.id, cree_a=_maintenant_aware()))
+    session.add(Chute(journee_id=journee.id, personne_id=personne.id, verte=verte, cree_a=_maintenant_aware()))
     session.commit()
     jour = session.scalar(select(func.count()).select_from(Chute).where(Chute.journee_id == journee.id, Chute.personne_id == personne.id))
     saison = session.scalar(select(func.count()).select_from(Chute).where(Chute.personne_id == personne.id))
-    return f"🤕 Chute de {personne.prenom} notée. Aujourd'hui : {jour} · saison : {saison}."
+    return f"🤕 Chute de {personne.prenom} notée{' sur une verte 🟢' if verte else ''}. Aujourd'hui : {jour} · saison : {saison}."
 
 
 def ajouter_citation(session: Session, auteur: Personne, args: list[str]) -> str:

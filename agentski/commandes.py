@@ -7,7 +7,9 @@ from .db import SessionLocal
 
 AIDE = ("Voilà ce que je sais faire :\n"
         "• /moment [texte] : poser un marqueur dans la journée\n"
-        "• /chute [prénom] : noter une chute (la tienne par défaut)\n"
+        "• /chute [prénom] [verte] : noter une chute (la tienne par défaut)\n"
+        "• /easter : ajouter une archive à la réserve de surprises (de préférence en privé)\n"
+        "• /chambre [prénom] : une archive tout de suite\n"
         "• /citation [prénom] \"phrase\" : garder une phrase culte\n"
         "• Envoie-moi tes photos et vidéos de moins de 20 Mo, je les range par journée.\n"
         "• Le soir, je te demande ta note sur 10 et une phrase.")
@@ -84,8 +86,10 @@ async def commande_moment(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def commande_chute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    mots = [m for m in context.args if m.lower() != "verte"]
+    verte = len(mots) != len(context.args)
     with SessionLocal() as session:
-        reponse = amis.ajouter_chute(session, _personne(session, update), " ".join(context.args) or None)
+        reponse = amis.ajouter_chute(session, _personne(session, update), " ".join(mots) or None, verte)
     await update.message.reply_text(reponse)
 
 
@@ -97,6 +101,9 @@ async def commande_citation(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     m = update.message
+    from . import fun
+    if await fun.media_pour_archive(update, context):  # un média attendu pour l'ajout d'une archive d'easter egg
+        return
     if m.photo:
         type_, fichier = "photo", m.photo[-1]
     elif m.video:
@@ -130,6 +137,9 @@ async def texte_libre(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     """Un texte : réponse à la phrase du soir ou à la capsule si c'est une réponse à ces questions, sinon l'entretien."""
     reponse_a = update.message.reply_to_message.message_id if update.message.reply_to_message else None
     if reponse_a is not None:
+        from . import fun
+        if await fun.description_archive(update, context, reponse_a):
+            return
         with SessionLocal() as session:
             personne = _personne(session, update)
             phrase = amis.enregistrer_phrase(session, personne, reponse_a, update.message.text)
