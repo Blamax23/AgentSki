@@ -32,12 +32,12 @@ def message(uid, texte):
 
 
 def bouton(uid, data):
-    q = SimpleNamespace(data=data, answer=AsyncMock(), edit_message_text=AsyncMock())
+    q = SimpleNamespace(data=data, answer=AsyncMock(), edit_message_text=AsyncMock(), message=SimpleNamespace(chat_id=50))
     return SimpleNamespace(effective_user=SimpleNamespace(id=uid, first_name="Test"), effective_chat=None, message=None, callback_query=q), q
 
 
 def contexte():
-    return SimpleNamespace(user_data={}, bot=SimpleNamespace(send_message=AsyncMock()))
+    return SimpleNamespace(user_data={}, bot=SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=900))))
 
 
 async def passe(update, ctx):
@@ -79,7 +79,9 @@ async def main():
     await passe(up, ctx)
     with SessionLocal() as s:
         verifie(acces.personne_connue(s, 50).prenom == "Adrien", "le compte est rattaché à Adrien")
-    verifie(ctx.bot.send_message.await_count == 1, "Maxime est prévenu de l'arrivée")
+    envoyes = [c.args for c in ctx.bot.send_message.call_args_list]
+    verifie(envoyes[0][0] == 1 and "Adrien" in envoyes[0][1], "Maxime est prévenu de l'arrivée")
+    verifie("/moment" in envoyes[1][1] and "capsule" in envoyes[2][1].lower(), "l'arrivant reçoit l'aide, puis la première question de la capsule")
     up, _ = message(50, "salut")
     verifie(await passe(up, contexte()), "Adrien passe désormais directement")
 
