@@ -146,14 +146,14 @@ with SessionLocal() as s:
 
     spotify._http = http
     a(2026, 12, 12, 15, 0)
-    reponse = spotify.ajouter_morceau(s, maxime, "Daft Punk Get Lucky", http)
-    verifie("Ajouté à la playlist : Get Lucky — Daft Punk" in reponse, "/son titre : recherche puis ajout")
+    reponse = spotify.ajouter_morceau(s, maxime, "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http)
+    verifie("Ajouté à la playlist : Get Lucky — Daft Punk" in reponse, "/son avec un lien : morceau lu puis ajouté")
     jeton = journal[0]
     verifie(jeton[1] == "https://accounts.spotify.com/api/token" and jeton[2]["Authorization"].startswith("Basic ")
             and "grant_type=refresh_token" in jeton[3].decode() and "refresh_token=refresh1" in jeton[3].decode(), "jeton renouvelé avec le refresh token, en Basic")
     verifie(config.SPOTIFY_REFRESH_TOKEN == "refresh2", "un nouveau refresh token remplace l'ancien")
-    recherche = next(c for c in journal if "/search" in c[1])
-    verifie("type=track" in recherche[1] and "limit=1" in recherche[1] and recherche[2]["Authorization"] == "Bearer AT", "recherche : un seul résultat, jeton porteur")
+    lecture = next(c for c in journal if "/tracks/4uLU6hMCjMI75M1A2tKUQC" in c[1])
+    verifie(lecture[2]["Authorization"] == "Bearer AT" and not any("/search" in c[1] for c in journal), "ajout par lien : lecture exacte du morceau, aucune recherche au hasard")
     creation = next(c for c in journal if c[1].endswith("/me/playlists"))
     verifie(json.loads(creation[3])["public"] is False and "Chronique ski" in json.loads(creation[3])["name"], "playlist créée en privé, nommée d'après le week-end")
     ajout = next(c for c in journal if c[1].endswith("/playlists/PL1/items"))
@@ -162,12 +162,17 @@ with SessionLocal() as s:
     verifie("déjà dans la playlist" in spotify.ajouter_morceau(s, maxime, "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http), "doublon refusé, rien d'ajouté deux fois")
     verifie(len([c for c in journal if c[1].endswith("/me/playlists")]) == 1, "la playlist du week-end n'est créée qu'une fois")
     verifie("Billie Jean" in spotify.ajouter_morceau(s, maxime, "https://open.spotify.com/track/5ChkMS8OtdzJeqyybCc9R5", http), "lien collé : le morceau est lu puis ajouté")
-    verifie("Je ne trouve pas" in spotify.ajouter_morceau(s, maxime, "https://open.spotify.com/track/ZZZZZZZZZZZZZZZZZZZZZZ", http), "lien inconnu : message clair")
+    def inconnu(methode, url, entetes, corps=None):
+        if "/tracks/" in url:
+            raise spotify.SpotifyErreur(404, "not found")
+        return http(methode, url, entetes, corps)
+    verifie("Je ne trouve pas" in spotify.ajouter_morceau(s, maxime, "https://open.spotify.com/track/ZZZZZZZZZZZZZZZZZZZZZZ", inconnu), "lien inconnu (404) : message clair")
     verifie("Format" in spotify.ajouter_morceau(s, maxime, "  ", http), "/son vide : le format")
 
     def casse(*a, **k):
         raise RuntimeError("503")
-    verifie("ne répond pas" in spotify.ajouter_morceau(s, maxime, "autre titre", casse), "Spotify en panne : message clair")
+    verifie("ne répond pas" in spotify.ajouter_morceau(s, maxime, "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB", casse), "Spotify en panne : message clair, et pas « introuvable »")
+    verifie("Il me faut un lien" in spotify.ajouter_morceau(s, maxime, "Daft Punk Get Lucky", http), "un titre écrit n'est jamais ajouté directement : on renvoie vers la recherche")
     verifie(len(s.scalars(select(Morceau)).all()) == 2, "…rien n'est rangé en base")
 
     # --- Blind test -----------------------------------------------------------------------------------------------
@@ -212,10 +217,10 @@ spotify._jeton.update(valeur=None, expire=0.0)
 ecouteurs = {"id": "D1", "name": "iPhone de Maxime", "is_active": True, "is_restricted": False}
 salon = {"id": "D2", "name": "Enceinte du salon", "is_active": False, "is_restricted": False}
 etat["appareils"] = [ecouteurs, salon]
-rep = spotify.lancer_musique("Daft Punk Get Lucky", http_lecture)
+rep = spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http_lecture)
 play = [c for c in appels if c[0] == "PUT"][-1]
 verifie("Lecture sur iPhone de Maxime : Get Lucky — Daft Punk" in rep, "/play titre : lancé sur l'appareil actif")
-verifie(play[1] == spotify.API + "/me/player/play" and json.loads(play[2]) == {"uris": ["spotify:track:T1"]}, "…par PUT /me/player/play avec l'URI, sans device_id : l'appareil actif est utilisé")
+verifie(play[1] == spotify.API + "/me/player/play" and json.loads(play[2]) == {"uris": ["spotify:track:4uLU6hMCjMI75M1A2tKUQC"]}, "…par PUT /me/player/play avec l'URI, sans device_id : l'appareil actif est utilisé")
 appels.clear()
 verifie("Lecture sur iPhone de Maxime" in spotify.lancer_musique("", http_lecture) and [c for c in appels if c[0] == "PUT"][-1][2] == b"", "/play sans titre : reprend la lecture, corps vide mais présent")
 appels.clear()
@@ -224,10 +229,10 @@ rep = spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tK
 verifie("device_id=D2" in [c for c in appels if c[0] == "PUT"][-1][1] and "Enceinte du salon" in rep, "aucun appareil actif mais un seul disponible : visé par son identifiant")
 appels.clear()
 etat["appareils"] = [dict(ecouteurs, is_active=False), dict(salon)]
-rep = spotify.lancer_musique("Get Lucky", http_lecture)
+rep = spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http_lecture)
 verifie("Plusieurs appareils" in rep and "iPhone" in rep and "Enceinte" in rep and not [c for c in appels if c[0] == "PUT"], "plusieurs appareils, aucun actif : on liste et on ne devine pas")
 etat["appareils"] = []
-verifie("Aucun appareil Spotify" in spotify.lancer_musique("Get Lucky", http_lecture), "aucun appareil : on explique comment le réveiller")
+verifie("Aucun appareil Spotify" in spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http_lecture), "aucun appareil : on explique comment le réveiller")
 etat["appareils"] = [dict(ecouteurs, is_restricted=True)]
 verifie("Aucun appareil Spotify" in spotify.lancer_musique("", http_lecture), "appareil qui n'accepte aucune commande : écarté")
 etat["appareils"] = [ecouteurs]
@@ -239,7 +244,12 @@ verifie("attendre" in spotify.lancer_musique("", http_lecture), "limite de débi
 etat["erreur"] = 500
 verifie("ne répond pas comme prévu" in spotify.lancer_musique("", http_lecture), "autre erreur : message clair")
 etat["erreur"] = None
-verifie("Je ne trouve pas" in spotify.lancer_musique("zzz", lambda m, u, e, c=None: {"tracks": {"items": []}} if "/search" in u else http_lecture(m, u, e, c)), "titre introuvable : rien n'est lancé")
+def introuvable(m, u, e, c=None):
+    if "/tracks/" in u:
+        raise spotify.SpotifyErreur(404, "x")
+    return http_lecture(m, u, e, c)
+verifie("Je ne trouve pas" in spotify.lancer_musique("https://open.spotify.com/track/ZZZZZZZZZZZZZZZZZZZZZZ", introuvable), "lien inconnu : rien n'est lancé")
+verifie("Il me faut un lien" in spotify.lancer_musique("Get Lucky", http_lecture), "un titre écrit n'est jamais lancé directement")
 appels.clear()
 verifie("en pause" in spotify.mettre_en_pause(http_lecture) and appels[-1][1] == spotify.API + "/me/player/pause" and appels[-1][0] == "PUT", "/pause : PUT /me/player/pause")
 etat["erreur"] = 404
@@ -252,14 +262,89 @@ config.SPOTIFY_CLIENT_ID = ""
 verifie("pas branché" in spotify.lancer_musique("x", http_lecture) and "pas branché" in spotify.mettre_en_pause(http_lecture), "Spotify non configuré : /play et /pause le disent")
 config.SPOTIFY_CLIENT_ID = saved
 
+# --- Trois propositions à choisir, et file d'attente -----------------------------------------------------------------
+resultats = [{"id": f"{i:022d}", "uri": f"spotify:track:{i:022d}", "name": nom, "artists": [{"name": art}], "album": {"name": alb, "release_date": date_}}
+             for i, (nom, art, alb, date_) in enumerate([("Get Lucky", "Daft Punk", "Random Access Memories", "2013-05-17"),
+                                                         ("Get Lucky (Radio Edit)", "Daft Punk", "Get Lucky", "2013-04-19"),
+                                                         ("Get Lucky - Live", "Les Reprises", "", ""), ("Quatrième", "X", "Y", "2000")], 1)]
+vus_recherche = []
+def http_recherche(methode, url, entetes, corps=None):
+    if "accounts.spotify.com" in url:
+        return {"access_token": "AT3", "expires_in": 3600}
+    vus_recherche.append(url)
+    return {"tracks": {"items": resultats if "q=rien" not in url else []}}
+spotify._jeton.update(valeur=None, expire=0.0)
+config.SPOTIFY_CLIENT_ID = "cid"
+message, boutons = spotify.proposer("Daft Punk Get Lucky", "son", 42, http_recherche)
+verifie("limit=3" in vus_recherche[0] and "type=track" in vus_recherche[0], "recherche : trois résultats demandés à Spotify")
+verifie(message.count("\n") == 3 and "1. Get Lucky — Daft Punk (Random Access Memories, 2013)" in message and "Quatrième" not in message, "trois propositions détaillées : titre, artiste, album, année")
+verifie("3. Get Lucky - Live — Les Reprises" in message and "()" not in message, "une proposition sans album ni année n'affiche pas de parenthèses vides")
+verifie([t for t, _ in boutons[0]] == ["1", "2", "3", "Aucun"] and boutons[0][0][1] == f"s|son|{resultats[0]['id']}|42", "boutons 1, 2, 3 et Aucun, qui portent l'action et la personne")
+verifie(all(len(d.encode()) <= 64 for _, d in boutons[0]), "les données des boutons tiennent dans la limite de Telegram (64 octets)")
+verifie("Je ne trouve pas « rien »" in spotify.proposer("rien", "son", 42, http_recherche)[0] and spotify.proposer("rien", "son", 42, http_recherche)[1] is None, "aucun résultat : message clair, pas de boutons")
+verifie("Format" in spotify.proposer("  ", "son", 42, http_recherche)[0], "recherche vide : le format")
+verifie("ne répond pas" in spotify.proposer("x", "son", 42, casse)[0], "Spotify en panne : message clair")
+
+appels_file = []
+def http_file(methode, url, entetes, corps=None):
+    appels_file.append((methode, url))
+    if "accounts.spotify.com" in url:
+        return {"access_token": "AT4", "expires_in": 3600}
+    if url.endswith("/me/player/devices"):
+        return {"devices": etat["appareils"]}
+    if "/tracks/" in url:
+        return {"id": "4uLU6hMCjMI75M1A2tKUQC", "uri": "spotify:track:4uLU6hMCjMI75M1A2tKUQC", "name": "Get Lucky", "artists": [{"name": "Daft Punk"}]}
+    if etat["erreur"] and methode == "POST":
+        raise spotify.SpotifyErreur(etat["erreur"], "x")
+    return {}
+spotify._jeton.update(valeur=None, expire=0.0)
+etat["appareils"], etat["erreur"] = [ecouteurs, salon], None
+rep = spotify.mettre_en_file(LIEN := "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http_file)
+post = [c for c in appels_file if c[0] == "POST"][-1]
+verifie("Ajouté à la file d'attente sur iPhone de Maxime : Get Lucky — Daft Punk" in rep, "/file : ajouté à la file de l'appareil actif")
+verifie(post[1].startswith(spotify.API + "/me/player/queue?") and "uri=spotify%3Atrack%3A4uLU6hMCjMI75M1A2tKUQC" in post[1] and "device_id" not in post[1], "…par POST /me/player/queue avec l'URI, sans device_id")
+verifie(not [c for c in appels_file if c[0] == "PUT"], "…sans jamais lancer de lecture : la musique en cours n'est pas coupée")
+appels_file.clear()
+etat["appareils"] = [dict(salon)]
+spotify.mettre_en_file(LIEN, http_file)
+verifie("device_id=D2" in [c for c in appels_file if c[0] == "POST"][-1][1], "/file : un seul appareil inactif, visé par son identifiant")
+etat["appareils"], etat["erreur"] = [ecouteurs], 404
+verifie("lance d'abord un morceau" in spotify.mettre_en_file(LIEN, http_file), "/file sans lecture en cours (404) : on explique d'utiliser /play")
+etat["erreur"] = 403
+verifie("Premium" in spotify.mettre_en_file(LIEN, http_file), "/file refusé (403) : Premium ou autorisation")
+etat["erreur"] = None
+etat["appareils"] = []
+verifie("Aucun appareil Spotify" in spotify.mettre_en_file(LIEN, http_file), "/file sans appareil : on explique comment le réveiller")
+verifie("Il me faut un lien" in spotify.mettre_en_file("Get Lucky", http_file), "/file avec un titre écrit : renvoyé vers la recherche")
+
 # --- Couche Telegram ---------------------------------------------------------------------------------------------
 async def telegram():
     spotify.ajouter_morceau = lambda session, personne, texte, http=None: f"AJOUT:{texte}"
     spotify.lancer_musique = lambda texte, http=None: f"PLAY:{texte}"
+    spotify.mettre_en_file = lambda texte, http=None: f"FILE:{texte}"
     spotify.mettre_en_pause = lambda http=None: "PAUSE"
     up = SimpleNamespace(message=SimpleNamespace(text=None, reply_text=AsyncMock()), effective_user=SimpleNamespace(id=1))
+    spotify.proposer = lambda texte, action, tid, http=None: (f"CHOIX:{action}:{texte}", [[("1", f"s|{action}|{'1' * 22}|{tid}"), ("Aucun", f"s|x|0|{tid}")]])
     await integrations.commande_play(up, SimpleNamespace(args=["Get", "Lucky"]))
-    verifie(up.message.reply_text.call_args[0][0] == "PLAY:Get Lucky", "/play Get Lucky depuis Telegram")
+    verifie("CHOIX:play:Get Lucky" in up.message.reply_text.call_args[0][0] and up.message.reply_text.call_args.kwargs["reply_markup"] is not None, "/play avec un titre : propositions à choisir, rien n'est lancé")
+    await integrations.commande_play(up, SimpleNamespace(args=[LIEN]))
+    verifie(up.message.reply_text.call_args[0][0] == f"PLAY:{LIEN}", "/play avec un lien : lancé tout de suite")
+    await integrations.commande_file(up, SimpleNamespace(args=["Get", "Lucky"]))
+    verifie("CHOIX:file:Get Lucky" in up.message.reply_text.call_args[0][0], "/file avec un titre : propositions à choisir")
+    await integrations.commande_file(up, SimpleNamespace(args=[LIEN]))
+    verifie(up.message.reply_text.call_args[0][0] == f"FILE:{LIEN}", "/file avec un lien : ajouté tout de suite")
+    for action, attendu in (("play", "PLAY:spotify:track:"), ("file", "FILE:spotify:track:"), ("son", "AJOUT:spotify:track:")):
+        q = SimpleNamespace(data=f"s|{action}|{'1' * 22}|1", answer=AsyncMock(), edit_message_text=AsyncMock(), message=SimpleNamespace(chat_id=77, text="🔎 Voici…\n1. X"))
+        ctx = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
+        await integrations.bouton_morceau(SimpleNamespace(callback_query=q, effective_user=SimpleNamespace(id=1)), ctx)
+        verifie(ctx.bot.send_message.call_args[0][1].startswith(attendu), f"choix « {action} » : l'action part avec le morceau choisi")
+    q = SimpleNamespace(data=f"s|play|{'1' * 22}|1", answer=AsyncMock(), edit_message_text=AsyncMock(), message=SimpleNamespace(chat_id=77, text="x"))
+    ctx = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
+    await integrations.bouton_morceau(SimpleNamespace(callback_query=q, effective_user=SimpleNamespace(id=2)), ctx)
+    verifie(q.answer.call_args.kwargs.get("show_alert") and not ctx.bot.send_message.await_count, "choix d'une autre personne que celle qui a cherché : refusé, rien ne part")
+    q = SimpleNamespace(data="s|x|0|1", answer=AsyncMock(), edit_message_text=AsyncMock(), message=SimpleNamespace(chat_id=77, text="x"))
+    await integrations.bouton_morceau(SimpleNamespace(callback_query=q, effective_user=SimpleNamespace(id=1)), ctx)
+    verifie("annulée" in q.edit_message_text.call_args[0][0] and not ctx.bot.send_message.await_count, "« Aucun » : recherche annulée, rien ne part")
     await integrations.commande_pause(up, SimpleNamespace(args=[]))
     verifie(up.message.reply_text.call_args[0][0] == "PAUSE", "/pause depuis Telegram")
     up = SimpleNamespace(message=SimpleNamespace(text="https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", reply_text=AsyncMock()), effective_user=SimpleNamespace(id=1))
@@ -267,7 +352,7 @@ async def telegram():
     verifie("AJOUT:https://open" in up.message.reply_text.call_args[0][0], "lien collé dans le groupe : ajouté sans commande")
     up = SimpleNamespace(message=SimpleNamespace(text=None, reply_text=AsyncMock()), effective_user=SimpleNamespace(id=1))
     await integrations.commande_son(up, SimpleNamespace(args=["Get", "Lucky"]))
-    verifie("AJOUT:Get Lucky" in up.message.reply_text.call_args[0][0], "/son Get Lucky")
+    verifie("CHOIX:son:Get Lucky" in up.message.reply_text.call_args[0][0], "/son avec un titre : propositions à choisir")
     config.SPOTIFY_CLIENT_ID = ""
     up = SimpleNamespace(message=SimpleNamespace(text="https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", reply_text=AsyncMock()), effective_user=SimpleNamespace(id=1))
     await integrations.lien_spotify(up, SimpleNamespace(args=[]))

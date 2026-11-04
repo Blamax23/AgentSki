@@ -77,17 +77,48 @@ def _api(methode: str, chemin: str, corps: dict | None = None, http=_http) -> di
     return http(methode, f"{API}{chemin}", {"Authorization": f"Bearer {jeton_acces(http)}", "Content-Type": "application/json"}, donnees)
 
 
-def chercher_titre(recherche: str, http=_http) -> dict | None:
-    r = _api("GET", "/search?" + urllib.parse.urlencode({"q": recherche, "type": "track", "limit": 1}), http=http)
-    items = (r.get("tracks") or {}).get("items") or []
-    return items[0] if items else None
+def chercher_titres(recherche: str, n: int = 3, http=_http) -> list[dict]:
+    """Les n premiers résultats d'une recherche de titre (Spotify en renvoie 10 au plus)."""
+    r = _api("GET", "/search?" + urllib.parse.urlencode({"q": recherche, "type": "track", "limit": n}), http=http)
+    return ((r.get("tracks") or {}).get("items") or [])[:n]
+
+
+def _detail(piste: dict) -> str:
+    album = piste.get("album") or {}
+    annee = (album.get("release_date") or "")[:4]
+    complement = ", ".join(x for x in (album.get("name"), annee) if x)
+    return f"{piste['name']} — {', '.join(a['name'] for a in piste.get('artists', []))}" + (f" ({complement})" if complement else "")
+
+
+def proposer(texte: str, action: str, telegram_id: int, http=_http) -> tuple[str, list | None]:
+    """Les trois premiers résultats d'un titre, à choisir en boutons : on ne prend jamais le premier au hasard.
+    `action` : « son » (ajouter à la playlist) ou « play » (lancer). Le bouton porte celui qui a lancé la recherche."""
+    if not configure():
+        return "Spotify n'est pas branché : il faut créer une application et lancer scripts/spotify_autoriser.py.", None
+    texte = texte.strip()
+    if not texte:
+        return "Format : un titre à chercher, ou un lien Spotify.", None
+    try:
+        pistes = chercher_titres(texte, 3, http)
+    except SpotifyErreur as e:
+        return _erreur_lecture(e), None
+    except Exception:
+        return "Spotify ne répond pas pour l'instant : réessaie dans un moment.", None
+    if not pistes:
+        return f"Je ne trouve pas « {texte} » sur Spotify.", None
+    lignes = "\n".join(f"{i}. {_detail(p)}" for i, p in enumerate(pistes, 1))
+    boutons = [[(str(i), f"s|{action}|{p['id']}|{telegram_id}") for i, p in enumerate(pistes, 1)] + [("Aucun", f"s|x|0|{telegram_id}")]]
+    return f"🔎 Voici les {len(pistes)} premiers résultats pour « {texte} ». Lequel ?\n{lignes}", boutons
 
 
 def lire_morceau(track_id: str, http=_http) -> dict | None:
+    """Le morceau, ou None s'il n'existe pas. Toute autre erreur (panne, limite) remonte au lieu de passer pour « introuvable »."""
     try:
         return _api("GET", f"/tracks/{track_id}", http=http)
-    except RuntimeError:
-        return None
+    except SpotifyErreur as e:
+        if e.code in (400, 404):
+            return None
+        raise
 
 
 def playlist_du_weekend(session: Session, weekend: Weekend, http=_http) -> str:
@@ -112,9 +143,9 @@ def ajouter_morceau(session: Session, auteur: Personne, texte: str, http=_http) 
         return "Format : /son Daft Punk Get Lucky, ou colle un lien Spotify."
     try:
         track_id = extraire_id(texte)
-        piste = lire_morceau(track_id, http) if track_id else chercher_titre(texte, http)
+        piste = lire_morceau(track_id, http) if track_id else None  # un titre écrit passe par proposer() : jamais le premier résultat au hasard
         if piste is None:
-            return f"Je ne trouve pas « {texte} » sur Spotify."
+            return f"Je ne trouve pas « {texte} » sur Spotify." if track_id else "Il me faut un lien Spotify : pour chercher un titre, utilise /son titre."
         journee = journee_du_jour(session, auteur)
         weekend = session.get(Weekend, journee.weekend_id)
         if session.scalar(select(Morceau.id).where(Morceau.weekend_id == weekend.id, Morceau.track_id == piste["id"])):
@@ -142,6 +173,8 @@ def _erreur_lecture(e: SpotifyErreur) -> str:
                 "soit le compte n'est pas Premium, qui est obligatoire pour commander la lecture.")
     if e.code == 429:
         return "Spotify demande d'attendre un peu : réessaie dans une minute."
+    if e.code == 404:
+        return "Spotify ne trouve aucun appareil en lecture : lance d'abord un morceau (/play), puis réessaie."
     return "Spotify ne répond pas comme prévu pour l'instant : réessaie dans un moment."
 
 
@@ -170,9 +203,9 @@ def lancer_musique(auteur_texte: str, http=_http) -> str:
         corps, titre = None, ""
         if texte:
             track_id = extraire_id(texte)
-            piste = lire_morceau(track_id, http) if track_id else chercher_titre(texte, http)
+            piste = lire_morceau(track_id, http) if track_id else None
             if piste is None:
-                return f"Je ne trouve pas « {texte} » sur Spotify."
+                return f"Je ne trouve pas « {texte} » sur Spotify." if track_id else "Il me faut un lien Spotify : pour chercher un titre, utilise /play titre."
             corps = {"uris": [piste["uri"]]}
             titre = f" : {piste['name']} — {', '.join(a['name'] for a in piste.get('artists', []))}"
         appareils = _api("GET", "/me/player/devices", http=http).get("devices", [])
@@ -200,3 +233,31 @@ def mettre_en_pause(http=_http) -> str:
     except Exception:
         return "Spotify ne répond pas pour l'instant : réessaie dans un moment."
     return "⏸ Musique en pause."
+
+
+def mettre_en_file(texte: str, http=_http) -> str:
+    """/file [titre ou lien] : ajoute le morceau à la file d'attente de l'appareil Spotify, sans couper ce qui joue.
+    POST /me/player/queue (Premium) ; un titre écrit passe d'abord par proposer()."""
+    if not configure():
+        return "Spotify n'est pas branché : il faut créer une application et lancer scripts/spotify_autoriser.py."
+    track_id = extraire_id(texte)
+    if not track_id:
+        return "Il me faut un lien Spotify : pour chercher un titre, utilise /file titre."
+    try:
+        piste = lire_morceau(track_id, http)
+        if piste is None:
+            return f"Je ne trouve pas « {texte.strip()} » sur Spotify."
+        appareil, explication = _choisir_appareil(_api("GET", "/me/player/devices", http=http).get("devices", []))
+        if appareil is None:
+            return explication
+        parametres = {"uri": piste["uri"]}
+        if not appareil.get("is_active"):
+            parametres["device_id"] = appareil["id"]
+        _api("POST", "/me/player/queue?" + urllib.parse.urlencode(parametres), http=http)
+    except SpotifyAbsent:
+        return "Spotify n'est pas configuré."
+    except SpotifyErreur as e:
+        return _erreur_lecture(e)
+    except Exception:
+        return "Spotify ne répond pas pour l'instant : réessaie dans un moment."
+    return f"➕ Ajouté à la file d'attente sur {appareil['name']} : {_detail(piste)}"
