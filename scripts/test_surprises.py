@@ -81,6 +81,10 @@ with SessionLocal() as s:
     archive = surprises.tirer(s)
     l1 = surprises.improviser_ligne(s, archive, gen)
     verifie(s.get(Archive, archive.id).nb_envois == 1 and s.scalar(select(Replique)).texte == l1, "la réplique est gardée, le compteur monte")
+    prompts = []
+    surprises.improviser_ligne(s, archive, lambda systeme, user: (prompts.append((systeme, user)) or "Une ligne neutre 🤣"))
+    verifie("chute" not in prompts[0][1].lower() and "tombé" not in prompts[0][1].lower(), "la réplique ne reçoit aucune donnée sur les chutes")
+    verifie("Aucune référence au ski" in prompts[0][0], "la consigne interdit toute référence au ski, aux pistes et aux chutes")
     l2 = surprises.improviser_ligne(s, archive, lambda *_: l1)
     verifie(l2 != l1 and "ça ne s'oublie pas" in l2, "jamais deux fois la même ligne sur une archive : repli si le modèle se répète")
     l3 = surprises.improviser_ligne(s, archive, lambda *_: (_ for _ in ()).throw(RuntimeError("réseau")))

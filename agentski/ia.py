@@ -85,7 +85,7 @@ def extraire(transcription: str, jour: str, pistes: list[str], periode: str = "b
     return json.loads(r["choices"][0]["message"]["content"])
 
 
-def creatif(systeme: str, utilisateur: str, max_tokens: int = 400) -> str:
+def creatif(systeme: str, utilisateur: str, max_tokens: int = 900) -> str:
     """Texte court et libre du modèle créatif (répliques, flash infos, briefing). Toujours en ZDR, sans recherche web.
     Ce modèle réfléchit obligatoirement : l'effort est réduit, sinon la réflexion épuise les jetons et coupe la réponse."""
     r = _appeler("chat/completions", {

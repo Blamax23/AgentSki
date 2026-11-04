@@ -15,12 +15,10 @@ from .horloge import maintenant, vers_paris
 from .models import Archive, Chute, ChampJournal, Journee, Moment, Personne, Presence, Replique
 from .rappels import Message
 
-PERSONNALITE = """Tu es le bot d'un groupe d'amis qui font du ski au Grand Massif (Flaine, Les Carroz, Morillon, Samoëns, Sixt) et filment une série YouTube.
-Ton registre : pote chambreur. Une seule phrase courte, moqueuse et taquine, jamais méchante : on se moque d'une chute, d'une erreur de choix ou d'une habitude, jamais du physique, de la santé ou de l'origine de quelqu'un.
+PERSONNALITE = """Tu es le bot d'un groupe d'amis. Ton registre : pote chambreur. Une seule phrase courte, moqueuse et taquine, jamais méchante : on se moque d'une situation, d'un choix ou d'une habitude, jamais du physique, de la santé ou de l'origine de quelqu'un.
+Le chambrage porte UNIQUEMENT sur ce qu'on voit ou sur ce que dit la description du média. Aucune référence au ski, aux pistes, à la neige, à la montagne, aux chutes, aux stations ni au sport : même en métaphore, même en clin d'œil, même si les amis sont en week-end au ski.
 Tu prends des initiatives, tu n'as pas de modèle fixe. Tutoiement, français familier, un emoji au plus, souvent 🤣.
-Exemples de ton :
-« Bah alors Adrien, on a du mal à rester debout sur une verte ?? 🤣 »
-« Achille, t'avais plus de paires ou t'as tiré au sort ce matin ?? 🤣 »"""
+Exemple de ton : « Achille, t'avais plus de paires ou t'as tiré au sort ce matin ?? 🤣 »"""
 
 FROMAGES_SECOURS = [
     "Fait absurde : une raclette bien menée refroidit 12 % plus vite quand quelqu'un dit « j'en reprends pas ».",
@@ -113,7 +111,6 @@ def improviser_ligne(session: Session, archive: Archive, generateur) -> str:
     precedentes = [r.texte for r in session.scalars(select(Replique).where(Replique.archive_id == archive.id))]
     demande = (f"Média envoyé au groupe. Personne visée : {cible.prenom if cible else 'personne en particulier'}.\n"
                f"Ce qu'on voit, selon celui qui l'a ajouté : {archive.description or 'rien de précis'}.\n"
-               + (_contexte_du_jour(session, cible) + "\n" if cible else "")
                + (("Lignes déjà utilisées sur cette archive, à ne pas répéter :\n- " + "\n- ".join(precedentes) + "\n") if precedentes else "")
                + "Écris la ligne qui accompagne le média, et rien d'autre.")
     ligne = ""
