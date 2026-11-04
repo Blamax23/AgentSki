@@ -27,6 +27,18 @@ RELANCE_DE_H = int(os.environ.get("RELANCE_DE_H", "8"))
 RELANCE_JUSQU_A_H = int(os.environ.get("RELANCE_JUSQU_A_H", "22"))
 
 
+# Entretien du soir
+MODELE_TRANSCRIPTION = os.environ.get("MODELE_TRANSCRIPTION", "mistralai/voxtral-small-transcribe-3-0")
+MODELE_EXTRACTION = os.environ.get("MODELE_EXTRACTION", "anthropic/claude-haiku-5.5")
+RELANCES_MAX = int(os.environ.get("RELANCES_MAX", "7"))  # la doc prévoit 6 à 8 ; la question des chutes est en plus
+DUREE_MORCEAU_S = int(os.environ.get("DUREE_MORCEAU_S", "50"))  # les fournisseurs coupent à 60 s de traitement
+HEURE_REPRISE = os.environ.get("HEURE_REPRISE", "09:00")
+STATIONS = ["Flaine", "Les Carroz", "Morillon", "Samoëns", "Sixt"]
+METEOS = ["☀️ Grand soleil", "⛅ Nuageux", "🌫 Brouillard", "🌨 Neige", "💨 Vent"]
+NEIGES = ["❄️ Poudreuse", "🧊 Dure", "💧 Soupe", "🪨 Tôlée", "🔀 Variable"]
+TONS = ["😂 Rigolo", "🤩 Épique", "😌 Tranquille", "😅 Galère", "😬 Tendu"]
+FICHIER_PISTES = ROOT / "donnees" / "pistes.txt"
+
 # Question d'accès : dans .env, jamais dans le code. Sans réponse configurée, les inconnus sont ignorés.
 QUESTION_ACCES = os.environ.get("QUESTION_ACCES", "")
 REPONSE_ACCES = os.environ.get("REPONSE_ACCES", "")

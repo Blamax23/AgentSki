@@ -1,5 +1,10 @@
+import asyncio
 import logging
+import re
+import tempfile
 from datetime import datetime, timezone
+
+from pathlib import Path
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (Application, ApplicationHandlerStop, CallbackQueryHandler, CommandHandler, ContextTypes,
@@ -7,7 +12,7 @@ from telegram.ext import (Application, ApplicationHandlerStop, CallbackQueryHand
 
 from sqlalchemy import select
 
-from . import acces, config, rappels, simulation
+from . import acces, audio, config, entretien, ia, journal, rappels, simulation
 from .db import SessionLocal, seed_personnes, sync_allowed_users
 from .models import Personne
 
@@ -118,6 +123,94 @@ async def bouton_jeudi(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await query.edit_message_text(message.texte, reply_markup=clavier(message))
 
 
+async def envoyer(chat_id: int, context: ContextTypes.DEFAULT_TYPE, messages: list[rappels.Message]) -> None:
+    for m in messages:
+        await context.bot.send_message(chat_id, m.texte, reply_markup=clavier(m))
+
+
+async def bouton_entretien(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    with SessionLocal() as session:
+        personne = acces.personne_connue(session, update.effective_user.id)
+        reaction = entretien.bouton(session, query.data, personne.id)
+    await query.answer()
+    if reaction.edition is not None:
+        await query.edit_message_text(reaction.edition.texte, reply_markup=clavier(reaction.edition))
+    await envoyer(query.message.chat_id, context, reaction.suite)
+
+
+def _traiter(entretien_id: int, texte: str, duree: float | None, cout: float | None) -> list[rappels.Message]:
+    """Extraction et suite de l'entretien (appels réseau bloquants : à lancer dans un fil)."""
+    with SessionLocal() as session:
+        e = session.get(entretien.Entretien, entretien_id)
+        return entretien.recevoir_transcription(session, e, texte, duree, cout, ia.extraire)
+
+
+async def traiter_transcription(chat_id: int, context: ContextTypes.DEFAULT_TYPE, entretien_id: int, texte: str,
+                                duree: float | None = None, cout: float | None = None) -> None:
+    extrait = texte if len(texte) <= 600 else texte[:600] + "…"
+    await context.bot.send_message(chat_id, f"📝 J'ai compris : « {extrait} »")
+    messages = await asyncio.to_thread(_traiter, entretien_id, texte, duree, cout)
+    await envoyer(chat_id, context, messages)
+
+
+async def vocal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    media = update.message.voice or update.message.audio
+    with SessionLocal() as session:
+        personne = acces.personne_connue(session, update.effective_user.id)
+        e = entretien.entretien_ouvert(session, personne.id)
+        entretien_id = e.id if e else None
+    if entretien_id is None:
+        await update.message.reply_text("Je n'ai pas d'entretien en cours avec toi. "
+                                        "Le bouton « Commencer l'entretien » arrive avec le rappel du soir.")
+        return
+    if media.file_size and media.file_size > 20 * 1024 * 1024:
+        await update.message.reply_text("Trop lourd, envoie une version plus courte.")
+        return
+    await update.message.reply_text("🎧 Je t'écoute, ça prend quelques secondes…")
+    try:
+        with tempfile.TemporaryDirectory() as dossier:  # l'audio est supprimé dès la fin du bloc
+            source = Path(dossier) / "vocal.ogg"
+            await (await media.get_file()).download_to_drive(source)
+            morceaux = await asyncio.to_thread(audio.en_morceaux_mp3, source, Path(dossier))
+            texte, cout = await asyncio.to_thread(ia.transcrire, morceaux)
+    except Exception:
+        log.exception("Transcription échouée")
+        await update.message.reply_text("Je n'ai pas réussi à transcrire ce vocal. Renvoie-le, ou réessaie dans un instant.")
+        return
+    if not texte:
+        await update.message.reply_text("Je n'ai rien entendu dans ce vocal. Tu peux le refaire ?")
+        return
+    await traiter_transcription(update.effective_chat.id, context, entretien_id, texte, media.duration, cout)
+
+
+async def commande_journal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        cible = datetime.strptime(context.args[0], "%Y-%m-%d").date() if context.args else None
+    except ValueError:
+        await update.message.reply_text("Format : /journal, ou /journal 2026-12-12")
+        return
+    with SessionLocal() as session:
+        texte = journal.journal_md(session, cible)
+    for i in range(0, len(texte), 4000):
+        await update.message.reply_text(texte[i:i + 4000])
+
+
+async def supprime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """« /supprime 12 », « supprime #12 », ou « supprime ça » en réponse à un message qui contient un seul #numéro."""
+    texte = update.message.text
+    numero = journal.numero_cite(re.sub(r"^/?supprime\S*", "", texte, flags=re.I))
+    if numero is None and update.message.reply_to_message and update.message.reply_to_message.text:
+        cites = re.findall(r"#(\d+)", update.message.reply_to_message.text)
+        numero = int(cites[0]) if len(cites) == 1 else None
+    if numero is None:
+        await update.message.reply_text("Quel élément ? Dis « supprime 12 » avec le numéro du /journal, "
+                                        "ou réponds « supprime ça » à un message qui n'en contient qu'un.")
+        return
+    with SessionLocal() as session:
+        await update.message.reply_text(journal.supprimer(session, numero))
+
+
 async def tic(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Chaque minute : prévoit le prochain jeudi, puis envoie les rappels dont l'heure est passée."""
     with SessionLocal() as session:
@@ -146,6 +239,11 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start))
     simulation.installer(app)  # fausses commandes, à retirer au gel de l'étape 4
     app.add_handler(CallbackQueryHandler(bouton_jeudi, pattern=r"^j\|"))
+    app.add_handler(CallbackQueryHandler(bouton_entretien, pattern=r"^e\|"))
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, vocal))
+    app.add_handler(CommandHandler("journal", commande_journal))
+    app.add_handler(CommandHandler("supprime", supprime))
+    app.add_handler(MessageHandler(filters.Regex(r"(?i)^\s*supprime"), supprime))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, echo))
     app.job_queue.run_repeating(tic, interval=60, first=5)
     app.run_polling()

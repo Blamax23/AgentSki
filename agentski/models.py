@@ -108,6 +108,8 @@ class Entretien(Base):
     personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
     # en_cours | reporte | passe | termine
     etat: Mapped[str] = mapped_column(String(20), default="en_cours")
+    # Ce que le bot attend : vocal | presents | stations | meteo | neige | ton | filmeur | pistes | moments | chutes | fini
+    attente: Mapped[str] = mapped_column(String(20), default="vocal")
     relances: Mapped[int] = mapped_column(Integer, default=0)
     cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
@@ -129,10 +131,13 @@ class ChampJournal(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     journee_id: Mapped[int] = mapped_column(ForeignKey("journee.id"))
+    entretien_id: Mapped[int | None] = mapped_column(ForeignKey("entretien.id"))
     transcription_id: Mapped[int | None] = mapped_column(ForeignKey("transcription.id"))
-    cle: Mapped[str] = mapped_column(String(50))  # station, piste, meteo, neige, note, moment...
+    cle: Mapped[str] = mapped_column(String(50))  # station, piste, meteo, neige, ton, moment, filmeur, chute_vocal...
     valeur: Mapped[str] = mapped_column(Text)
     phrase_source: Mapped[str | None] = mapped_column(Text)
+    detail: Mapped[str | None] = mapped_column(String(100))  # qui filmait une piste, nombre d'une chute...
+    verifie: Mapped[bool] = mapped_column(Boolean, default=False)  # confirmé par bouton : jamais réécrit par une extraction
     supprime: Mapped[bool] = mapped_column(Boolean, default=False)  # « supprime ça »
 
 

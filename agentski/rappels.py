@@ -141,6 +141,12 @@ def a_envoyer(session: Session) -> list[Envoi]:
             continue
         if r.type == "jeudi":
             msg = ecran_jours(vers_paris(r.envoyer_a).date(), 0)
+        elif r.type == "reprise":
+            from .entretien import message_reprise
+            msg = message_reprise(session, r.journee_id, r.destinataire_id)
+            if msg is None:  # entretien repris ou passé entre-temps
+                r.abandonne_a = maintenant()
+                continue
         elif r.type == "relance_jeudi":
             local = vers_paris(r.envoyer_a).date()
             msg = ecran_jours(local - timedelta(days=local.weekday() - 3), 0, relance=True)
@@ -305,4 +311,4 @@ def texte_soir(session: Session, journee: Journee) -> Message:
                                                      Journee.ski.is_(True)))
     if lendemain is not None:
         lignes.append(f"• Demain on skie encore : rappel à {config.HEURE_MATIN}.")
-    return Message("\n".join(lignes))
+    return Message("\n".join(lignes), [[("🎙 Commencer l'entretien", f"e|go|{journee.id}")]])

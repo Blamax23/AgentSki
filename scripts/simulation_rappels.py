@@ -79,7 +79,7 @@ with SessionLocal() as session:
             rappels.marquer_envoye(session, envoi.rappel_id)
             envoyes += 1
             print(f"\n[{local:%a %d/%m %H:%M}] → Maxime\n{envoi.message.texte}")
-            if envoi.message.boutons:
+            if envoi.message.boutons and "Tu skies" in envoi.message.texte:
                 jeudi = (local.date() - timedelta(days=local.weekday() - 3)).isoformat()
                 if local >= REPONDRE_APRES.get(jeudi, datetime.min):
                     print(f"  (réponse simulée) {repondre_au_jeudi(session, envoi.message, jeudi).texte}")
