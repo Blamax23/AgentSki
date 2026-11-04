@@ -141,6 +141,9 @@ def a_envoyer(session: Session) -> list[Envoi]:
             continue
         if r.type == "jeudi":
             msg = ecran_jours(vers_paris(r.envoyer_a).date(), 0)
+        elif r.type == "note":
+            from .amis import ecran_note
+            msg = ecran_note(r.journee_id)
         elif r.type == "reprise":
             from .entretien import message_reprise
             msg = message_reprise(session, r.journee_id, r.destinataire_id)

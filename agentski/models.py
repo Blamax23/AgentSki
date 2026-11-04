@@ -160,6 +160,7 @@ class Moment(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     journee_id: Mapped[int] = mapped_column(ForeignKey("journee.id"))
+    personne_id: Mapped[int | None] = mapped_column(ForeignKey("personne.id"))
     texte: Mapped[str | None] = mapped_column(Text)
     cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
@@ -171,4 +172,54 @@ class Citation(Base):
     journee_id: Mapped[int] = mapped_column(ForeignKey("journee.id"))
     personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
     texte: Mapped[str] = mapped_column(Text)
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Reglage(Base):
+    """Réglages que le bot apprend en route : par exemple l'identifiant du groupe Telegram."""
+    __tablename__ = "reglage"
+
+    cle: Mapped[str] = mapped_column(String(50), primary_key=True)
+    valeur: Mapped[str] = mapped_column(Text)
+
+
+class Note(Base):
+    """Note sur 10 (peur ou confiance) et phrase du soir d'une personne pour une journée ; sert aux incrustations."""
+    __tablename__ = "note"
+    __table_args__ = (UniqueConstraint("journee_id", "personne_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    journee_id: Mapped[int] = mapped_column(ForeignKey("journee.id"))
+    personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    note: Mapped[int] = mapped_column(Integer)
+    phrase: Mapped[str | None] = mapped_column(Text)
+    message_id: Mapped[int | None] = mapped_column(Integer)  # message du bot qui attend la phrase (réponse forcée)
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Media(Base):
+    """Photo ou vidéo de moins de 20 Mo reçue via Telegram : seule la référence est gardée, jamais le fichier."""
+    __tablename__ = "media"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    journee_id: Mapped[int | None] = mapped_column(ForeignKey("journee.id"))
+    type: Mapped[str] = mapped_column(String(20))  # photo | video | animation | document
+    file_id: Mapped[str] = mapped_column(String(200))
+    taille: Mapped[int | None] = mapped_column(Integer)
+    legende: Mapped[str | None] = mapped_column(Text)
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Capsule(Base):
+    """Capsule temporelle : prédiction, objectif et message à soi-même, révélés au dernier week-end de la saison."""
+    __tablename__ = "capsule"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"), unique=True)
+    prediction: Mapped[str | None] = mapped_column(Text)
+    objectif: Mapped[str | None] = mapped_column(Text)
+    message: Mapped[str | None] = mapped_column(Text)
+    message_id: Mapped[int | None] = mapped_column(Integer)  # question du bot en attente de réponse
+    revelee_a: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

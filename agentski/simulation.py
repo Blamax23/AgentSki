@@ -6,6 +6,7 @@
 /simule_pov       « /simule_pov Adrien 5 » : ajoute des descentes filmées (ce que fera l'entretien du soir, étape 3)
 /simule_reset     vide week-ends, présences, descentes, rappels, entretiens et faits du journal (avec confirmation)
 /simule_entretien démarre l'entretien du soir maintenant (ce que fera le bouton du rappel de 19 h) ; crée la journée du jour si besoin
+/simule_notes     envoie tout de suite la demande de note sur 10 et de phrase (ce qui part à 20 h) aux présents du jour
 /simule_vocal     « /simule_vocal Samedi à Flaine avec Adrien… » : un vocal dont tu fournis la transcription
 """
 from datetime import datetime, timedelta
@@ -126,6 +127,17 @@ async def commande_entretien(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await envoyer(update.effective_chat.id, context, messages)
 
 
+async def commande_notes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    from .bot import tic
+    from . import amis
+    with SessionLocal() as session:
+        orga = acces.personne_connue(session, update.effective_user.id)
+        amis.journee_du_jour(session, orga)  # crée la journée du jour si besoin
+        amis.planifier_notes(session, forcer=True)
+    await tic(context)
+    await update.message.reply_text("Demande de note envoyée aux présents du jour qui ont un compte Telegram.")
+
+
 async def commande_vocal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     from .bot import traiter_transcription
     texte = " ".join(context.args)
@@ -147,4 +159,5 @@ def installer(app) -> None:
     app.add_handler(CommandHandler("simule_reset", reserve(commande_reset)))
     app.add_handler(CommandHandler("simule_entretien", reserve(commande_entretien)))
     app.add_handler(CommandHandler("simule_vocal", reserve(commande_vocal)))
+    app.add_handler(CommandHandler("simule_notes", reserve(commande_notes)))
     app.add_handler(CallbackQueryHandler(reserve(bouton_reset), pattern=r"^sim\|"))

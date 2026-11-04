@@ -12,7 +12,7 @@ from telegram.ext import (Application, ApplicationHandlerStop, CallbackQueryHand
 
 from sqlalchemy import select
 
-from . import acces, audio, config, entretien, ia, journal, rappels, simulation
+from . import acces, amis, audio, commandes, config, entretien, ia, journal, rappels, simulation
 from .db import SessionLocal, seed_personnes, sync_allowed_users
 from .models import Personne
 
@@ -68,6 +68,11 @@ async def accueillir_inconnu(update: Update, context: ContextTypes.DEFAULT_TYPE)
             log.warning("Accès accordé : id=%s (%s) rattaché à %s", user.id, user.first_name, personne.prenom)
             await prevenir_organisateur(context, f"{user.first_name} (Telegram {user.id}) a répondu juste et "
                                                  f"s'est déclaré·e {personne.prenom}.")
+            await context.bot.send_message(query.message.chat_id, commandes.AIDE)
+            with SessionLocal() as session:
+                question = amis.demarrer_capsule(session, personne)
+            if question:
+                await commandes.poser_capsule(query.message.chat_id, context, personne.id, question)
         return
 
     if update.message is None or not update.message.text:
@@ -103,12 +108,6 @@ async def prevenir_organisateur(context: ContextTypes.DEFAULT_TYPE, texte: str) 
         destinataire = orga.telegram_id if orga else None
     if destinataire:
         await context.bot.send_message(destinataire, "🔔 " + texte)
-
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    with SessionLocal() as session:
-        prenom = acces.personne_connue(session, update.effective_user.id).prenom
-    await update.message.reply_text(f"Salut {prenom}, je suis là.")
 
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -230,6 +229,7 @@ async def tic(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Chaque minute : prévoit le prochain jeudi, puis envoie les rappels dont l'heure est passée."""
     with SessionLocal() as session:
         rappels.planifier_jeudi(session)
+        amis.planifier_notes(session)
         for envoi in rappels.a_envoyer(session):
             if envoi.telegram_id is None:
                 continue  # destinataire sans /start : réessayé jusqu'à l'abandon
@@ -251,7 +251,7 @@ def main() -> None:
 
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
     app.add_handler(TypeHandler(Update, liste_blanche), group=-1)
-    app.add_handler(CommandHandler("start", start))
+    commandes.installer(app)
     simulation.installer(app)  # fausses commandes, à retirer au gel de l'étape 4
     app.add_handler(CallbackQueryHandler(bouton_jeudi, pattern=r"^j\|"))
     app.add_handler(CallbackQueryHandler(bouton_entretien, pattern=r"^e\|"))
@@ -259,7 +259,7 @@ def main() -> None:
     app.add_handler(CommandHandler("journal", commande_journal))
     app.add_handler(CommandHandler("supprime", supprime))
     app.add_handler(MessageHandler(filters.Regex(r"(?i)^\s*supprime"), supprime))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texte_entretien))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, commandes.texte_libre))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, echo))
     app.job_queue.run_repeating(tic, interval=60, first=5)
     app.run_polling()
