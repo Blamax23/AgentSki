@@ -37,7 +37,8 @@ STATIONS = ["Flaine", "Les Carroz", "Morillon", "Samoëns", "Sixt"]
 METEOS = ["☀️ Grand soleil", "⛅ Nuageux", "🌫 Brouillard", "🌨 Neige", "💨 Vent"]
 NEIGES = ["❄️ Poudreuse", "🧊 Dure", "💧 Soupe", "🪨 Tôlée", "🔀 Variable"]
 TONS = ["😂 Rigolo", "🤩 Épique", "😌 Tranquille", "😅 Galère", "😬 Tendu"]
-FICHIER_PISTES = ROOT / "donnees" / "pistes.txt"
+FICHIER_PISTES = ROOT / "donnees" / "pistes.txt"  # pistes de départ, dans le dépôt
+FICHIER_PISTES_APPRISES = ROOT / "data" / "pistes_apprises.txt"  # pistes ajoutées au fil des entretiens
 
 # Question d'accès : dans .env, jamais dans le code. Sans réponse configurée, les inconnus sont ignorés.
 QUESTION_ACCES = os.environ.get("QUESTION_ACCES", "")

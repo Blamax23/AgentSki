@@ -31,9 +31,22 @@ class Reaction:
 # --- Pistes -----------------------------------------------------------------
 
 def pistes_connues() -> list[str]:
-    if not config.FICHIER_PISTES.exists():
-        return []
-    return [l.strip() for l in config.FICHIER_PISTES.read_text(encoding="utf-8").splitlines() if l.strip()]
+    """Pistes de départ (dépôt) puis pistes apprises au fil des entretiens (données locales)."""
+    pistes: list[str] = []
+    for fichier in (config.FICHIER_PISTES, config.FICHIER_PISTES_APPRISES):
+        if fichier.exists():
+            pistes += [l.strip() for l in fichier.read_text(encoding="utf-8").splitlines() if l.strip()]
+    return list(dict.fromkeys(pistes))
+
+
+def apprendre_piste(nom: str) -> None:
+    """Retient une piste que Maxime a écrite ou gardée : elle sera reconnue et proposée aux prochains entretiens."""
+    nom = nom.strip()
+    if not nom or reconnaitre_piste(nom) is not None:
+        return
+    config.FICHIER_PISTES_APPRISES.parent.mkdir(parents=True, exist_ok=True)
+    with config.FICHIER_PISTES_APPRISES.open("a", encoding="utf-8") as f:
+        f.write(nom + "\n")
 
 
 def _norm(texte: str) -> str:
@@ -252,7 +265,7 @@ def _ecran_choix(e: Entretien, action: str, question: str, options: list[str]) -
 def _ecran_piste(e: Entretien, champ: ChampJournal) -> Message:
     boutons = [[(p, f"e|{e.id}|piste|{champ.id}|{j}")] for j, p in enumerate(pistes_connues())]
     boutons.append([(f"Garder « {champ.valeur} »", f"e|{e.id}|piste|{champ.id}|k")])
-    return Message(f"J'ai noté « {champ.valeur} ». C'est quelle piste ?", boutons)
+    return Message(f"J'ai noté « {champ.valeur} ». C'est quelle piste ? Choisis, ou écris son nom.", boutons)
 
 
 def _chutes_comptees(session: Session, e: Entretien) -> dict[str, int]:
@@ -340,6 +353,8 @@ def bouton(session: Session, data: str, personne_id: int) -> Reaction:
         champ = session.get(ChampJournal, int(args[0]))
         if args[1] != "k":
             champ.valeur = pistes_connues()[int(args[1])]
+        else:
+            apprendre_piste(champ.valeur)  # « garder » : c'est bien une piste, on la retient
         champ.verifie = True
         session.commit()
         return Reaction(edition=Message(f"Piste : {champ.valeur}."), suite=[question_suivante(session, e)])
@@ -354,6 +369,20 @@ def bouton(session: Session, data: str, personne_id: int) -> Reaction:
     if action == "chutefin":
         return Reaction(edition=Message("Chutes notées."), suite=[_finaliser(session, e)])
     return Reaction()
+
+
+def saisir_piste(session: Session, e: Entretien, texte: str) -> list[Message]:
+    """Maxime écrit le nom de la piste au lieu de choisir un bouton. Sans piste à confirmer, rien ne se passe."""
+    if e.attente != "pistes":
+        return []
+    champ = next((p for p in _faits(session, e, "piste") if p.valeur not in pistes_connues() and not p.verifie), None)
+    if champ is None:
+        return []
+    champ.valeur = reconnaitre_piste(texte) or texte.strip()
+    champ.verifie = True
+    apprendre_piste(champ.valeur)
+    session.commit()
+    return [Message(f"Piste : {champ.valeur}."), question_suivante(session, e)]
 
 
 def _finaliser(session: Session, e: Entretien) -> Message:

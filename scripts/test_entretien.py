@@ -18,6 +18,7 @@ from agentski.db import SessionLocal, engine, seed_personnes  # noqa: E402
 from agentski.models import (Base, ChampJournal, Chute, Descente, Entretien, Journee, Personne, Presence, Rappel,  # noqa: E402
                              Transcription, Weekend)
 
+config.FICHIER_PISTES_APPRISES = Path(tempfile.mkdtemp()) / "pistes_apprises.txt"  # pas de fichier réel touché
 Base.metadata.create_all(engine)
 
 
@@ -179,6 +180,29 @@ with SessionLocal() as s:
     msgs = entretien.recevoir_transcription(s, e4, "un vocal", None, None, casse)
     verifie("pas réussi à l'analyser" in msgs[0].texte and "Qui était là" in msgs[1].texte, "extraction en panne : message clair, on continue en boutons")
     verifie(s.scalar(select(Transcription).where(Transcription.entretien_id == e4.id)).texte_brut == "un vocal", "…et la transcription est gardée")
+
+# --- Piste écrite ou gardée : retenue pour la fois suivante ---------------------
+with SessionLocal() as s:
+    j5 = Journee(weekend_id=s.scalar(select(Weekend.id)), jour=date(2026, 12, 17))
+    s.add(j5)
+    s.commit()
+    entretien.demarrer(s, j5.id, MID)
+    e5 = entretien.entretien_ouvert(s, MID)
+    e5.attente = "pistes"
+    entretien._ajouter(s, e5, "piste", "Timale", "à la Timale")
+    s.commit()
+    verifie(entretien.reconnaitre_piste("Timale") is None, "« Timale » n'est pas encore connue")
+    msgs = entretien.saisir_piste(s, e5, "  La Timale ")
+    verifie(msgs and "Piste : La Timale." in msgs[0].texte, "le nom écrit remplace la piste notée")
+    verifie("La Timale" in entretien.pistes_connues() and entretien.reconnaitre_piste("la timale") == "La Timale", "…et la piste est retenue")
+    verifie(entretien.saisir_piste(s, e5, "autre chose") == [], "sans piste à confirmer, un texte ne change rien")
+    e5.attente = "pistes"
+    entretien._ajouter(s, e5, "piste", "Combe Blanche", "la combe blanche")
+    s.commit()
+    champ = s.scalar(select(ChampJournal).where(ChampJournal.entretien_id == e5.id, ChampJournal.valeur == "Combe Blanche"))
+    entretien.bouton(s, f"e|{e5.id}|piste|{champ.id}|k", MID)
+    verifie("Combe Blanche" in entretien.pistes_connues(), "« Garder » retient aussi la piste")
+    verifie("Timale" in config.FICHIER_PISTES_APPRISES.read_text(encoding="utf-8"), "les pistes apprises sont dans le fichier de données local")
 
 # --- Reconnaissance des pistes ---------------------------------------------------
 verifie(entretien.reconnaitre_piste("tete des saix") == "Tête des Saix", "piste : accents et casse ignorés")

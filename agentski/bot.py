@@ -184,6 +184,18 @@ async def vocal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await traiter_transcription(update.effective_chat.id, context, entretien_id, texte, media.duration, cout)
 
 
+async def texte_entretien(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Un texte pendant un entretien : le nom d'une piste à confirmer. Sinon, réponse par défaut."""
+    with SessionLocal() as session:
+        personne = acces.personne_connue(session, update.effective_user.id)
+        e = entretien.entretien_ouvert(session, personne.id)
+        messages = entretien.saisir_piste(session, e, update.message.text) if e else []
+    if not messages:
+        await echo(update, context)
+        return
+    await envoyer(update.effective_chat.id, context, messages)
+
+
 async def commande_journal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         cible = datetime.strptime(context.args[0], "%Y-%m-%d").date() if context.args else None
@@ -244,6 +256,7 @@ def main() -> None:
     app.add_handler(CommandHandler("journal", commande_journal))
     app.add_handler(CommandHandler("supprime", supprime))
     app.add_handler(MessageHandler(filters.Regex(r"(?i)^\s*supprime"), supprime))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texte_entretien))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, echo))
     app.job_queue.run_repeating(tic, interval=60, first=5)
     app.run_polling()
