@@ -14,6 +14,7 @@ AIDE = ("Voilà ce que je sais faire :\n"
         "• /pari [texte], /paris, /resolu N Prénom : les paris\n"
         "• /course [plat] : la liste de courses du week-end\n"
         "• /defi : lancer un défi ; /ajout : alimenter les réserves en privé\n"
+        "• /info [station], /meteo [station] [jour], /avalanche, /pointmeteo on 07:00 : météo et neige\n"
         "• /citation [prénom] \"phrase\" : garder une phrase culte\n"
         "• Envoie-moi tes photos et vidéos de moins de 20 Mo, je les range par journée.\n"
         "• Le soir, je te demande ta note sur 10 et une phrase.")

@@ -38,6 +38,17 @@ TYPES = {
     "dj": ("Le DJ", True, False, True),
     "imitation": ("L'imitation", False, False, True),
 }
+DESCRIPTIONS = {  # ce que fait réellement chaque défi : le briefing n'a le droit de s'appuyer que sur ces phrases
+    "phrase": "une personne tirée au sort doit placer une phrase absurde face caméra dans la journée, le groupe valide",
+    "chef": "une personne tirée au sort cuisine un plat ce soir, les autres la notent sur 10",
+    "quiz": "une question tirée de la réserve ou du journal, chacun répond, la réponse se révèle ensuite",
+    "proces": "une personne tirée au sort est accusée à partir d'une de ses chutes ou d'une archive, 30 secondes pour se défendre, le groupe vote",
+    "gage": "une personne tirée au sort relève un gage au chalet ou au restaurant, jamais à ski, le groupe valide",
+    "debat": "une question absurde à trancher pendant la prochaine montée de télésiège, le verdict est noté au journal",
+    "pronostic": "une question sur la journée, chacun répond en privé le matin, le résultat est révélé au récap du soir",
+    "dj": "une personne tirée au sort choisit la musique du trajet ou de la soirée, les autres la notent",
+    "imitation": "chacun reçoit en privé un membre du groupe à imiter pendant le repas, les autres devinent",
+}
 INVENTER = {
     "phrase": "Une phrase absurde et inoffensive qu'un skieur doit placer face caméra dans la journée. Rien d'autre.",
     "chef": "Un plat de montagne ou de chalet, juste son nom. Rien d'autre.",

@@ -119,8 +119,9 @@ async def commande_anniversaire(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 def _evenements() -> list[surprises.Evenement]:
+    from . import briefing
     with SessionLocal() as session:
-        return surprises.evenements(session, ia.creatif)
+        return surprises.evenements(session, ia.creatif) + briefing.evenements_meteo(session, ia.creatif)
 
 
 async def envoyer_evenements(context: ContextTypes.DEFAULT_TYPE) -> None:
