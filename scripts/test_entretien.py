@@ -18,7 +18,10 @@ from agentski.db import SessionLocal, engine, seed_personnes  # noqa: E402
 from agentski.models import (Base, ChampJournal, Chute, Descente, Entretien, Journee, Personne, Presence, Rappel,  # noqa: E402
                              Transcription, Weekend)
 
-config.FICHIER_PISTES_APPRISES = Path(tempfile.mkdtemp()) / "pistes_apprises.txt"  # pas de fichier réel touché
+_dossier = Path(tempfile.mkdtemp())
+config.FICHIER_PISTES_APPRISES = _dossier / "pistes_apprises.txt"  # pas de fichier réel touché
+config.FICHIER_PISTES = _dossier / "pistes.txt"  # liste de départ fixe, indépendante de celle du dépôt
+config.FICHIER_PISTES.write_text("Les Grandes Platières\nTête des Saix\nLes Cascades\n", encoding="utf-8")
 Base.metadata.create_all(engine)
 
 
@@ -236,10 +239,31 @@ with SessionLocal() as s:
     verifie("Combe Blanche" in entretien.pistes_connues(), "« Garder » retient aussi la piste")
     verifie("Timale" in config.FICHIER_PISTES_APPRISES.read_text(encoding="utf-8"), "les pistes apprises sont dans le fichier de données local")
 
+# --- Beaucoup de pistes : l'écran ne propose que les plus proches -------------------------
+with SessionLocal() as s:
+    config.FICHIER_PISTES.write_text("\n".join(["Les Grandes Platières", "Tête des Saix", "Les Cascades"] + [f"Piste numéro {i}" for i in range(130)]) + "\n", encoding="utf-8")
+    j6 = Journee(weekend_id=s.scalar(select(Weekend.id)), jour=date(2026, 12, 19))
+    s.add(j6)
+    s.commit()
+    entretien.demarrer(s, j6.id, MID)
+    e6 = entretien.entretien_ouvert(s, MID)
+    champ = entretien._ajouter(s, e6, "piste", "tête d'essai", "tête d'essai")
+    s.commit()
+    ecran = entretien._ecran_piste(e6, champ)
+    verifie(len(ecran.boutons) == 7, "133 pistes connues : 6 propositions et « Garder », pas 133 boutons")
+    verifie(ecran.boutons[0][0][0] == "Tête des Saix", "la piste la plus proche du mot noté est proposée en premier")
+    reaction = entretien.bouton(s, ecran.boutons[0][0][1], MID)
+    verifie("Tête des Saix" in reaction.edition.texte and s.get(ChampJournal, champ.id).valeur == "Tête des Saix", "le bouton choisit bien la bonne piste dans la liste complète")
+    config.FICHIER_PISTES.write_text("Les Grandes Platières\nTête des Saix\nLes Cascades\n", encoding="utf-8")
+
 # --- Reconnaissance des pistes ---------------------------------------------------
 verifie(entretien.reconnaitre_piste("tete des saix") == "Tête des Saix", "piste : accents et casse ignorés")
 verifie(entretien.reconnaitre_piste("les cascades") == "Les Cascades", "piste : article ignoré")
 verifie(entretien.reconnaitre_piste("tête d'essai") is None, "piste : un mot trop différent n'est pas deviné")
+config.FICHIER_PISTES.write_text("Marmotte\nMarmottes\nTimalets\n", encoding="utf-8")
+verifie(entretien.reconnaitre_piste("Marmottes") == "Marmottes" and entretien.reconnaitre_piste("Marmotte") == "Marmotte", "piste : deux noms voisins ne se confondent pas, le plus proche l'emporte")
+config.FICHIER_PISTES_APPRISES.write_text("", encoding="utf-8")  # un test précédent a appris « La Timale »
+verifie(entretien.reconnaitre_piste("Timale") == "Timalets", "piste : une prononciation proche est reconnue (« Timale » devient « Timalets »)")
 
 if "--reel" in sys.argv:
     from agentski import audio, ia

@@ -67,10 +67,12 @@ def _norm(texte: str) -> str:
 def reconnaitre_piste(nom: str) -> str | None:
     """Nom de la piste connue qui correspond (à l'accent, l'article ou une faute près), sinon None."""
     cible = _norm(nom)
-    for connue in pistes_connues():
-        if _norm(connue) == cible or difflib.SequenceMatcher(None, _norm(connue), cible).ratio() >= 0.85:
-            return connue
-    return None
+    meilleure, score = None, 0.0
+    for connue in pistes_connues():  # la plus proche l'emporte, pas la première trouvée : « Marmottes » ne devient pas « Marmotte »
+        ratio = 1.0 if _norm(connue) == cible else difflib.SequenceMatcher(None, _norm(connue), cible).ratio()
+        if ratio > score:
+            meilleure, score = connue, ratio
+    return meilleure if score >= 0.85 else None
 
 
 def reconnaitre_station(nom: str) -> str | None:
@@ -329,8 +331,17 @@ def _ecran_choix(e: Entretien, action: str, question: str, options: list[str]) -
     return Message(question, [[(o, f"e|{e.id}|{action}|{i}")] for i, o in enumerate(options)])
 
 
+def _candidates(valeur: str, n: int = 6) -> list[int]:
+    """Indices (dans la liste complète) des n pistes dont le nom ressemble le plus à `valeur`."""
+    toutes = pistes_connues()
+    cible = _norm(valeur)
+    return sorted(range(len(toutes)), key=lambda i: -difflib.SequenceMatcher(None, _norm(toutes[i]), cible).ratio())[:n]
+
+
 def _ecran_piste(e: Entretien, champ: ChampJournal) -> Message:
-    boutons = [[(p, f"e|{e.id}|piste|{champ.id}|{j}")] for j, p in enumerate(pistes_connues())]
+    """Les pistes les plus proches en boutons (la liste complète en compte plus d'une centaine), ou le nom écrit."""
+    toutes = pistes_connues()
+    boutons = [[(toutes[i], f"e|{e.id}|piste|{champ.id}|{i}")] for i in _candidates(champ.valeur)]
     boutons.append([(f"Garder « {champ.valeur} »", f"e|{e.id}|piste|{champ.id}|k")])
     return Message(f"J'ai noté « {champ.valeur} ». C'est quelle piste ? Choisis, ou écris son nom.", boutons)
 
