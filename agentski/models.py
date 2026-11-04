@@ -1,7 +1,7 @@
 """Schéma v1. Les heures sont stockées en UTC ; l'affichage et les rappels sont en Europe/Paris."""
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, MetaData, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -10,7 +10,10 @@ def now() -> datetime:
 
 
 class Base(DeclarativeBase):
-    pass
+    # Noms de contraintes explicites : SQLite en a besoin pour les modifier dans une migration
+    metadata = MetaData(naming_convention={
+        "ix": "ix_%(column_0_label)s", "uq": "uq_%(table_name)s_%(column_0_name)s",
+        "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s", "pk": "pk_%(table_name)s"})
 
 
 class Personne(Base):
@@ -90,9 +93,11 @@ class Rappel(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     destinataire_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
     type: Mapped[str] = mapped_column(String(30))  # jeudi | matin | soir
-    envoyer_a: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    journee_id: Mapped[int | None] = mapped_column(ForeignKey("journee.id"))  # pour matin et soir
+    envoyer_a: Mapped[datetime] = mapped_column(DateTime)  # UTC naïf
     texte: Mapped[str | None] = mapped_column(Text)
-    envoye_a: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    envoye_a: Mapped[datetime | None] = mapped_column(DateTime)
+    abandonne_a: Mapped[datetime | None] = mapped_column(DateTime)  # trop en retard, ou week-end modifié
 
 
 class Entretien(Base):

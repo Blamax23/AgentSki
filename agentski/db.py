@@ -19,6 +19,17 @@ def _pragmas(dbapi_conn, _):
 SessionLocal = sessionmaker(engine, expire_on_commit=False)
 
 
+def seed_personnes(session: Session) -> None:
+    """Crée les personnes connues qui manquent (sans identifiant Telegram tant qu'elles n'ont pas fait /start)."""
+    for prenom, statut in config.PERSONNES:
+        p = session.scalar(select(Personne).where(Personne.prenom == prenom))
+        if p is None:
+            session.add(Personne(prenom=prenom, statut=statut))
+        else:
+            p.statut = statut
+    session.commit()
+
+
 def sync_allowed_users(session: Session) -> None:
     """Met la table personne en accord avec ALLOWED_USERS (.env)."""
     for tid, prenom in config.allowed_users().items():
