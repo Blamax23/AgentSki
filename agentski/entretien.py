@@ -1,8 +1,9 @@
-"""Entretien du soir : un vocal d'ouverture, puis au plus quelques relances sur ce qui manque, puis la question des chutes.
+"""Entretien du soir : un fil conducteur (matin, midi, après-midi, soir), puis au plus quelques questions à boutons
+sur ce qui manque, puis la question des chutes.
 
 Cœur indépendant de Telegram : il lit et écrit la base, et renvoie des messages abstraits (texte + boutons).
 L'extraction par modèle de langage est passée en paramètre, ce qui permet de tout tester sans réseau.
-Callbacks : e|go|<journee> · e|<id>|passer · tard · reprendre · pres|<masque> · presok|<masque> · stat|<masque> ·
+Callbacks : e|go|<journee> · e|<id>|passer · tard · reprendre · rien · finfil · corr|<transcription> · pres|<masque> · presok|<masque> · stat|<masque> ·
 statok|<masque> · meteo|<i> · neige|<i> · ton|<i> · film|<i> · piste|<champ>|<j> · skipm · chute|<personne> · chutefin
 """
 import difflib
@@ -19,6 +20,14 @@ from .models import ChampJournal, Chute, Descente, Entretien, Journee, Personne,
 from .rappels import Message, _de, _jour_lisible
 
 FILMEURS = ["Maxime", "Adrien", "Les deux", "Personne"]
+
+# Le fil conducteur : une question courte par moment de la journée, dans l'ordre
+FIL = [("matin", "☀️ Ce matin : à quelle heure êtes-vous partis, où, et comment ça s'est passé ?"),
+       ("midi", "🍽 À midi : où avez-vous mangé ? Quelque chose à raconter sur la matinée ?"),
+       ("aprem", "🎿 L'après-midi : qu'avez-vous fait, quelles pistes ?"),
+       ("soir", "🌙 Et depuis la fin du ski : qu'est-ce qui s'est passé ce soir ?")]
+ETAPES = [cle for cle, _ in FIL]
+NOMS_PERIODES = {"matin": "matin", "midi": "midi", "aprem": "après-midi", "soir": "soir"}
 
 
 @dataclass
@@ -117,7 +126,7 @@ def _boutons_sortie(e: Entretien) -> list[tuple[str, str]]:
 def demarrer(session: Session, journee_id: int, personne_id: int) -> list[Message]:
     e = session.scalar(select(Entretien).where(Entretien.journee_id == journee_id, Entretien.personne_id == personne_id))
     if e is None:
-        e = Entretien(journee_id=journee_id, personne_id=personne_id)
+        e = Entretien(journee_id=journee_id, personne_id=personne_id, attente=ETAPES[0])
         session.add(e)
         session.commit()
     elif e.etat in ("termine", "passe"):
@@ -125,11 +134,28 @@ def demarrer(session: Session, journee_id: int, personne_id: int) -> list[Messag
     else:
         e.etat = "en_cours"
         session.commit()
-        if e.attente != "vocal":
-            return [Message("On reprend là où on s'était arrêtés."), question_suivante(session, e, compter=False)]
+        return [Message("On reprend là où on s'était arrêtés."), question_suivante(session, e, compter=False)]
     jour = _jour_lisible(_journee(session, e).jour)
-    return [Message(f"🎙 Entretien du soir — {jour}.\nRaconte ta journée en vocal : où vous êtes allés, ce qui s'est "
-                    "passé, ce qui t'a marqué. Je poserai quelques questions sur ce qui manque.", [_boutons_sortie(e)])]
+    intro = Message(f"🎙 Entretien du soir — {jour}.\nOn suit ta journée dans l'ordre : matin, midi, après-midi, soir. "
+                    "Réponds en vocal ou en texte, aussi court que tu veux, et touche « Rien à dire » quand il n'y a rien.")
+    return [intro, _prompt_etape(e)]
+
+
+def _prompt_etape(e: Entretien) -> Message:
+    texte = dict(FIL)[e.attente]
+    return Message(texte, [[("Rien à dire", f"e|{e.id}|rien")], [("Terminer le récit", f"e|{e.id}|finfil")], _boutons_sortie(e)])
+
+
+def _etape_suivante(session: Session, e: Entretien) -> Message:
+    """Passe à la question suivante du fil ; le fil terminé, on passe aux questions sur ce qui manque."""
+    i = ETAPES.index(e.attente) + 1 if e.attente in ETAPES else len(ETAPES)
+    if i < len(ETAPES):
+        e.attente = ETAPES[i]
+        session.commit()
+        return _prompt_etape(e)
+    e.attente = "bilan"
+    session.commit()
+    return _bilan(session, e, compter=True)
 
 
 def passer(session: Session, e: Entretien) -> Message:
@@ -162,33 +188,67 @@ def message_reprise(session: Session, journee_id: int, personne_id: int) -> Mess
 # --- Vocal reçu --------------------------------------------------------------
 
 def recevoir_transcription(session: Session, e: Entretien, texte: str, duree_s: float | None, cout: float | None,
-                           extracteur) -> list[Message]:
-    """Garde la transcription brute, extrait les faits de tout l'entretien, puis passe à la question suivante."""
-    t = Transcription(entretien_id=e.id, texte_brut=texte, duree_s=duree_s, cout=cout)
+                           extracteur, source: str = "vocal") -> list[Message]:
+    """Garde la transcription brute, extrait ses faits, puis passe à la suite du fil.
+    Si une correction est en attente, ce texte remplace celui que le bot avait mal compris."""
+    if e.correction_id:
+        return _corriger(session, e, texte, extracteur)
+    periode = e.attente if e.attente in ETAPES else "bilan"
+    t = Transcription(entretien_id=e.id, texte_brut=texte, periode=periode, duree_s=duree_s, cout=cout)
     session.add(t)
     session.commit()
-    cumul = " ".join(x.texte_brut for x in session.scalars(
-        select(Transcription).where(Transcription.entretien_id == e.id).order_by(Transcription.id)))
-    prefixe = []
+    messages = []
+    if source == "vocal":
+        messages.append(Message(f"📝 J'ai compris : « {_court(texte)} »", [[("✏️ Corriger", f"e|{e.id}|corr|{t.id}")]]))
     try:
-        donnees = extracteur(cumul, _journee(session, e).jour.isoformat(), pistes_connues())
+        donnees = extracteur(texte, _journee(session, e).jour.isoformat(), pistes_connues(), periode)
         _enregistrer_extraction(session, e, t, donnees)
-    except Exception as erreur:  # le vocal est gardé : on continue avec des boutons
+    except Exception as erreur:  # le vocal est gardé : on continue
         session.rollback()
-        prefixe = [Message("⚠️ J'ai bien gardé ton vocal mais je n'ai pas réussi à l'analyser. "
-                           "Je continue avec des questions à boutons.")]
+        messages.append(Message("⚠️ J'ai bien gardé ton message mais je n'ai pas réussi à l'analyser. "
+                                "Tu peux le corriger, ou on continue."))
         print(f"Extraction échouée : {erreur}")
-    return prefixe + [question_suivante(session, e)]
+    suite = _etape_suivante(session, e) if e.attente in ETAPES else question_suivante(session, e)
+    return messages + [suite]
+
+
+def _court(texte: str, n: int = 600) -> str:
+    return texte if len(texte) <= n else texte[:n] + "…"
+
+
+def _corriger(session: Session, e: Entretien, texte: str, extracteur) -> list[Message]:
+    t = session.get(Transcription, e.correction_id)
+    t.texte_corrige = texte
+    e.correction_id = None
+    session.execute(delete(ChampJournal).where(ChampJournal.transcription_id == t.id, ChampJournal.verifie.is_(False),
+                                               ChampJournal.supprime.is_(False)))
+    try:
+        donnees = extracteur(texte, _journee(session, e).jour.isoformat(), pistes_connues(), t.periode or "bilan")
+        _enregistrer_extraction(session, e, t, donnees)
+    except Exception as erreur:
+        session.rollback()
+        session.commit()
+        print(f"Extraction échouée : {erreur}")
+        return [Message("⚠️ Correction gardée, mais je n'ai pas réussi à la relire. On continue.")]
+    return [Message(f"✅ Corrigé : j'ai relu « {_court(texte, 300)} »")]
+
+
+def recevoir_texte_libre(session: Session, e: Entretien, texte: str, extracteur) -> list[Message]:
+    """Un texte écrit pendant un entretien : réponse au fil, correction, ou nom d'une piste à confirmer."""
+    if e.correction_id or e.attente in ETAPES:
+        return recevoir_transcription(session, e, texte, None, None, extracteur, source="texte")
+    return saisir_piste(session, e, texte)
 
 
 def _enregistrer_extraction(session: Session, e: Entretien, t: Transcription, d: dict) -> None:
-    # Les faits déjà confirmés par bouton, ou supprimés par l'utilisateur, ne sont jamais réécrits
-    session.execute(delete(ChampJournal).where(
-        ChampJournal.entretien_id == e.id, ChampJournal.verifie.is_(False), ChampJournal.supprime.is_(False),
-        ChampJournal.cle.in_(["station", "piste", "meteo", "neige", "ton", "moment", "chute_vocal"])))
+    existants = {(f.cle, f.valeur, f.periode) for f in session.scalars(select(ChampJournal).where(
+        ChampJournal.entretien_id == e.id))}
 
-    def ajouter(cle, valeur, source, detail=None):
-        _ajouter(session, e, cle, valeur, source, detail, transcription_id=t.id)
+    def ajouter(cle, valeur, source, detail=None, dedoublonner=True):
+        if dedoublonner and (cle, valeur, t.periode) in existants:
+            return
+        champ = _ajouter(session, e, cle, valeur, source, detail, transcription_id=t.id)
+        champ.periode = t.periode
 
     for x in d["stations"]:
         ajouter("station", reconnaitre_station(x["valeur"]) or x["valeur"], x["source"])
@@ -200,7 +260,7 @@ def _enregistrer_extraction(session: Session, e: Entretien, t: Transcription, d:
     for x in d["moments"]:
         ajouter("moment", x["valeur"], x["source"])
     for x in d["chutes"]:
-        ajouter("chute_vocal", x["personne"], x["source"], str(x["nombre"]))
+        ajouter("chute_vocal", x["personne"], x["source"], str(x["nombre"]), dedoublonner=False)
     session.commit()
 
 
@@ -215,7 +275,14 @@ def _poser(session: Session, e: Entretien, attente: str, message: Message, compt
 
 
 def question_suivante(session: Session, e: Entretien, compter: bool = True) -> Message:
-    """La plus utile des questions encore sans réponse ; toujours la question des chutes en dernier."""
+    """Question à poser maintenant : celle du fil si on y est encore, sinon la plus utile de celles qui manquent."""
+    if e.attente in ETAPES:
+        return _prompt_etape(e)
+    return _bilan(session, e, compter)
+
+
+def _bilan(session: Session, e: Entretien, compter: bool = True) -> Message:
+    """Questions à boutons sur ce qui manque, au plus RELANCES_MAX ; toujours la question des chutes en dernier."""
     if e.relances < config.RELANCES_MAX:
         if not _faits(session, e, "presents_ok"):
             return _poser(session, e, "presents", _ecran_presents(session, e, None), compter)
@@ -314,6 +381,17 @@ def bouton(session: Session, data: str, personne_id: int) -> Reaction:
         return Reaction(edition=Message("▶️ On reprend."), suite=[question_suivante(session, e, compter=False)])
     if e.etat != "en_cours":
         return Reaction(edition=Message("Cet entretien n'est plus en cours."))
+
+    if action == "rien":
+        return Reaction(edition=Message("OK, rien sur ce moment-là."), suite=[_etape_suivante(session, e)])
+    if action == "finfil":
+        e.attente = "bilan"
+        session.commit()
+        return Reaction(edition=Message("OK, on s'arrête là pour le récit."), suite=[_bilan(session, e)])
+    if action == "corr":
+        e.correction_id = int(args[0])
+        session.commit()
+        return Reaction(edition=Message("✏️ Envoie le bon texte (écrit, ou redis-le en vocal) et je le relis."))
 
     if action == "pres":
         return Reaction(edition=_ecran_presents(session, e, int(args[0])))

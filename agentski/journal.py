@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .entretien import _chutes_comptees  # noqa: F401  (comptage des chutes par personne)
+from .entretien import NOMS_PERIODES
 from .models import ChampJournal, Chute, Entretien, Journee, Personne, Presence, Weekend
 from .rappels import _jour_lisible, NOMS_MOIS
 
@@ -33,7 +33,8 @@ def _journee_md(session: Session, j: Journee) -> str:
             lignes.append(f"**{LIBELLES[cle]}** : " + ", ".join(_fait(c) for c in par_cle[cle]))
     if "moment" in par_cle:
         lignes.append("**Moments marquants**")
-        lignes += [f"- {_fait(c)}" for c in par_cle["moment"]]
+        lignes += [f"- {NOMS_PERIODES[c.periode] + ' · ' if c.periode in NOMS_PERIODES else ''}{_fait(c)}"
+                   for c in par_cle["moment"]]
     chutes = session.execute(select(Personne.prenom, Chute.id).join(Chute, Chute.personne_id == Personne.id).where(
         Chute.journee_id == j.id)).all()
     if chutes:

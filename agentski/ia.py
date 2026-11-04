@@ -70,13 +70,13 @@ Règles :
 - `moments` : les moments marquants racontés (une phrase courte chacun), pas les simples détails.
 - `chutes` : seulement les chutes dites explicitement, avec le nombre.
 - Quelqu'un seulement évoqué (« X aurait détesté ») n'est pas un participant : ne rien en déduire.
-Journée : {jour}."""
+Journée : {jour}. Moment raconté dans ce message : {periode}."""
 
 
-def extraire(transcription: str, jour: str, pistes: list[str]) -> dict:
-    """Renvoie l'extraction structurée de la transcription cumulée de l'entretien."""
+def extraire(transcription: str, jour: str, pistes: list[str], periode: str = "bilan") -> dict:
+    """Renvoie l'extraction structurée d'un message de l'entretien (matin, midi, aprem, soir ou bilan)."""
     consigne = CONSIGNE.format(personnes=", ".join(PERSONNES), stations=", ".join(config.STATIONS),
-                               pistes=", ".join(pistes), jour=jour)
+                               pistes=", ".join(pistes), jour=jour, periode=periode)
     r = _appeler("chat/completions", {
         "model": config.MODELE_EXTRACTION, "temperature": 0, "provider": {"zdr": True},
         "messages": [{"role": "system", "content": consigne}, {"role": "user", "content": transcription}],

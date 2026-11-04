@@ -111,6 +111,7 @@ class Entretien(Base):
     # Ce que le bot attend : vocal | presents | stations | meteo | neige | ton | filmeur | pistes | moments | chutes | fini
     attente: Mapped[str] = mapped_column(String(20), default="vocal")
     relances: Mapped[int] = mapped_column(Integer, default=0)
+    correction_id: Mapped[int | None] = mapped_column(Integer)  # transcription en cours de correction
     cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
@@ -120,6 +121,8 @@ class Transcription(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     entretien_id: Mapped[int] = mapped_column(ForeignKey("entretien.id"))
     texte_brut: Mapped[str] = mapped_column(Text)
+    texte_corrige: Mapped[str | None] = mapped_column(Text)  # si Maxime a corrigé ce que le bot avait compris
+    periode: Mapped[str | None] = mapped_column(String(12))  # matin | midi | aprem | soir | bilan
     duree_s: Mapped[float | None]
     cout: Mapped[float | None]
     cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
@@ -136,6 +139,7 @@ class ChampJournal(Base):
     cle: Mapped[str] = mapped_column(String(50))  # station, piste, meteo, neige, ton, moment, filmeur, chute_vocal...
     valeur: Mapped[str] = mapped_column(Text)
     phrase_source: Mapped[str | None] = mapped_column(Text)
+    periode: Mapped[str | None] = mapped_column(String(12))  # moment de la journée où le fait a été raconté
     detail: Mapped[str | None] = mapped_column(String(100))  # qui filmait une piste, nombre d'une chute...
     verifie: Mapped[bool] = mapped_column(Boolean, default=False)  # confirmé par bouton : jamais réécrit par une extraction
     supprime: Mapped[bool] = mapped_column(Boolean, default=False)  # « supprime ça »

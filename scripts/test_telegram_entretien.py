@@ -52,7 +52,7 @@ def fausse_transcription(morceaux):
     vus["morceaux"] = [m.name for m in morceaux]
     vus["existent"] = all(m.exists() for m in morceaux)
     return "Samedi à Flaine, grand soleil.", 0.001
-def fausse_extraction(texte, jour, pistes):
+def fausse_extraction(texte, jour, pistes, periode="bilan"):
     return {"stations": [{"valeur": "Flaine", "source": "à Flaine"}], "pistes": [], "meteo": {"valeur": "Grand soleil", "source": "grand soleil"},
             "neige": None, "ton": None, "moments": [], "chutes": []}
 bot.ia.transcrire, bot.ia.extraire = fausse_transcription, fausse_extraction
@@ -89,7 +89,7 @@ async def main():
     envoyes = [c.args[1] for c in ctx.bot.send_message.call_args_list]
     verifie(vus["morceaux"] == ["morceau_000.mp3"] and vus["existent"], "le vocal est converti en MP3 avant la transcription")
     verifie(any("J'ai compris : « Samedi à Flaine, grand soleil. »" in t for t in envoyes), "le texte compris est renvoyé pour vérification")
-    verifie(any("Qui était là" in t for t in envoyes), "puis la question suivante est posée")
+    verifie(any("À midi" in t for t in envoyes), "puis la question suivante du fil est posée")
     with SessionLocal() as s:
         verifie(s.scalar(select(Transcription)).cout == 0.001, "coût conservé avec la transcription")
 

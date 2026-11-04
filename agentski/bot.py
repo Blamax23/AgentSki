@@ -139,18 +139,16 @@ async def bouton_entretien(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await envoyer(query.message.chat_id, context, reaction.suite)
 
 
-def _traiter(entretien_id: int, texte: str, duree: float | None, cout: float | None) -> list[rappels.Message]:
+def _traiter(entretien_id: int, texte: str, duree: float | None, cout: float | None, source: str) -> list[rappels.Message]:
     """Extraction et suite de l'entretien (appels réseau bloquants : à lancer dans un fil)."""
     with SessionLocal() as session:
         e = session.get(entretien.Entretien, entretien_id)
-        return entretien.recevoir_transcription(session, e, texte, duree, cout, ia.extraire)
+        return entretien.recevoir_transcription(session, e, texte, duree, cout, ia.extraire, source)
 
 
 async def traiter_transcription(chat_id: int, context: ContextTypes.DEFAULT_TYPE, entretien_id: int, texte: str,
-                                duree: float | None = None, cout: float | None = None) -> None:
-    extrait = texte if len(texte) <= 600 else texte[:600] + "…"
-    await context.bot.send_message(chat_id, f"📝 J'ai compris : « {extrait} »")
-    messages = await asyncio.to_thread(_traiter, entretien_id, texte, duree, cout)
+                                duree: float | None = None, cout: float | None = None, source: str = "vocal") -> None:
+    messages = await asyncio.to_thread(_traiter, entretien_id, texte, duree, cout, source)
     await envoyer(chat_id, context, messages)
 
 
@@ -185,15 +183,20 @@ async def vocal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def texte_entretien(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Un texte pendant un entretien : le nom d'une piste à confirmer. Sinon, réponse par défaut."""
+    """Un texte pendant un entretien : réponse au fil, correction ou nom de piste. Sinon, réponse par défaut."""
     with SessionLocal() as session:
         personne = acces.personne_connue(session, update.effective_user.id)
         e = entretien.entretien_ouvert(session, personne.id)
-        messages = entretien.saisir_piste(session, e, update.message.text) if e else []
-    if not messages:
+        entretien_id = e.id if e else None
+        if e is not None and not e.correction_id and e.attente == "pistes":
+            messages = entretien.saisir_piste(session, e, update.message.text)
+            if messages:
+                await envoyer(update.effective_chat.id, context, messages)
+                return
+    if entretien_id is None or not (e.correction_id or e.attente in entretien.ETAPES):
         await echo(update, context)
         return
-    await envoyer(update.effective_chat.id, context, messages)
+    await traiter_transcription(update.effective_chat.id, context, entretien_id, update.message.text, source="texte")
 
 
 async def commande_journal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

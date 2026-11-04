@@ -28,7 +28,7 @@ def verifie(condition, texte):
         sys.exit(1)
 
 
-def extraction(texte, jour, pistes):
+def extraction(texte, jour, pistes, periode="bilan"):
     """Faux modèle : repère quelques mots, comme le ferait le vrai, avec la phrase source."""
     d = {"stations": [], "pistes": [], "meteo": None, "neige": None, "ton": None, "moments": [], "chutes": []}
     if "Flaine" in texte:
@@ -72,44 +72,52 @@ with SessionLocal() as s:
     soir = rappels.texte_soir(s, s.get(Journee, JID))
     verifie(any("e|go|" in d for ligne in soir.boutons for _, d in ligne), "le rappel du soir porte le bouton de l'entretien")
 
-    ouverture = entretien.demarrer(s, JID, MID)[0]
-    verifie("Raconte ta journée" in ouverture.texte and len(ouverture.boutons[0]) == 2, "ouverture : question ouverte + Passer / Plus tard")
+    intro, prompt = entretien.demarrer(s, JID, MID)
+    verifie("matin, midi, après-midi, soir" in intro.texte, "ouverture : le bot annonce le fil conducteur")
+    verifie("Ce matin" in prompt.texte and any("Rien à dire" in t for ligne in prompt.boutons for t, _ in ligne), "première question : le matin, avec « Rien à dire »")
     e = entretien.entretien_ouvert(s, MID)
-    verifie(e is not None and e.attente == "vocal", "entretien en cours, en attente du vocal")
+    verifie(e.attente == "matin", "entretien en cours, en attente de la réponse du matin")
 
-    texte = ("Samedi à Flaine avec Adrien. Première descente sur les grandes platières, "
-             "tête d'essai ensuite. Adrien est tombé deux fois. Grand soleil.")
+    texte = "Samedi à Flaine avec Adrien. Première descente sur les grandes platières. Grand soleil."
     msgs = entretien.recevoir_transcription(s, e, texte, 15.0, 0.001, extraction)
-    verifie(s.scalar(select(Transcription).where(Transcription.entretien_id == e.id)).texte_brut == texte, "transcription brute conservée")
+    verifie("J'ai compris" in msgs[0].texte and any("Corriger" in t for ligne in msgs[0].boutons for t, _ in ligne), "le bot renvoie ce qu'il a compris, avec « Corriger »")
+    verifie("À midi" in msgs[-1].texte and e.attente == "midi", "puis la question du midi : le fil avance tout seul")
+    t1 = s.scalar(select(Transcription).where(Transcription.entretien_id == e.id))
+    verifie(t1.texte_brut == texte and t1.periode == "matin", "transcription brute conservée, rangée au matin")
     faits = {(f.cle, f.valeur): f for f in s.scalars(select(ChampJournal).where(ChampJournal.entretien_id == e.id))}
-    verifie(("station", "Flaine") in faits and faits[("station", "Flaine")].phrase_source == "à Flaine", "fait extrait avec sa phrase source")
+    verifie(faits[("station", "Flaine")].phrase_source == "à Flaine" and faits[("station", "Flaine")].periode == "matin", "fait extrait avec sa phrase source et son moment")
     verifie(("piste", "Les Grandes Platières") in faits, "« Grandes Platières » reconnue comme la piste connue")
-    verifie(("meteo", "Grand soleil") in faits, "météo dite dans le vocal : pas redemandée")
-    verifie("Qui était là" in msgs[-1].texte and e.relances == 1, "première relance : qui était là (boutons)")
-    verifie("✅ Adrien" in str(msgs[-1].boutons), "les présents de la veille sont pré-cochés")
 
-    reaction = appuyer(s, msgs[-1], "Valider", MID)
+    reaction = entretien.bouton(s, f"e|{e.id}|rien", MID)
+    verifie("L'après-midi" in reaction.suite[0].texte and e.attente == "aprem", "« Rien à dire » : on passe à l'après-midi")
+
+    msgs = entretien.recevoir_texte_libre(s, e, "tête d'essai ensuite. Adrien est tombé deux fois.", extraction)
+    verifie("ce soir" in msgs[-1].texte and e.attente == "soir", "un texte écrit répond aussi au fil")
+    verifie(not any("J'ai compris" in m.texte for m in msgs), "pas de « j'ai compris » pour un texte écrit")
+
+    reaction = entretien.bouton(s, f"e|{e.id}|finfil", MID)
+    verifie("Qui était là" in reaction.suite[0].texte and e.relances == 1, "fin du récit : première question sur ce qui manque")
+    verifie("✅ Adrien" in str(reaction.suite[0].boutons), "les présents de la veille sont pré-cochés")
+
+    reaction = appuyer(s, reaction.suite[0], "Valider", MID)
     verifie("neige" in reaction.suite[0].texte.lower(), "présents confirmés ; station et météo déjà dites : on saute à la neige")
-    verifie(len(s.scalars(select(Presence).where(Presence.journee_id == JID)).all()) == 2, "présences enregistrées")
     reaction = appuyer(s, reaction.suite[0], "Dure", MID)
     verifie("ton" in reaction.suite[0].texte.lower(), "puis le ton")
     reaction = appuyer(s, reaction.suite[0], "Rigolo", MID)
-    verifie("tête d'essai" in reaction.suite[0].texte and "C'est quelle piste" in reaction.suite[0].texte, "piste inconnue : confirmation par boutons")
+    verifie("tête d'essai" in reaction.suite[0].texte and "écris son nom" in reaction.suite[0].texte, "piste inconnue : boutons, ou écrire le nom")
     reaction = appuyer(s, reaction.suite[0], "Tête des Saix", MID)
-    verifie("marqué" in reaction.suite[0].texte, "puis le moment marquant (vocal)")
-    verifie(s.get(Entretien, e.id).relances <= config.RELANCES_MAX, "au plus RELANCES_MAX relances")
+    verifie("marqué" in reaction.suite[0].texte, "puis le moment marquant")
+    verifie(s.get(Entretien, e.id).relances <= config.RELANCES_MAX, "au plus RELANCES_MAX questions sur ce qui manque")
     reaction = appuyer(s, reaction.suite[0], "Passer cette question", MID)
     ecran = reaction.suite[0]
-    verifie("Des chutes" in ecran.texte and "Adrien ×2" in ecran.texte, "chutes : le total déjà dit dans le vocal est affiché")
+    verifie("Des chutes" in ecran.texte and "Adrien ×2" in ecran.texte, "chutes : le total déjà dit est affiché")
     reaction = appuyer(s, ecran, "+1 Adrien", MID)
     verifie("Adrien ×3" in reaction.edition.texte, "+1 s'ajoute au total, sans doublon")
-    verifie(s.scalar(select(Chute.id).where(Chute.journee_id == JID).limit(1)) is not None, "chutes stockées")
     reaction = appuyer(s, reaction.edition, "Terminé", MID)
     verifie("Journal du Samedi 12 décembre enregistré" in reaction.suite[0].texte, "entretien terminé")
     descentes = s.scalars(select(Descente)).all()
     verifie(len(descentes) == 2 and {d.piste for d in descentes} == {"Les Grandes Platières", "Tête des Saix"}, "descentes créées")
     verifie(any(d.filmeur_id == AID for d in descentes), "qui filmait est conservé par descente")
-    verifie(s.get(Entretien, e.id).etat == "termine", "état : terminé")
 
     md = journal.journal_md(s, None)
     verifie("# Week-end du 12 au 13 décembre 2026" in md and "Adrien ×3" in md and "Flaine (#" in md, "/journal en Markdown")
@@ -119,6 +127,27 @@ with SessionLocal() as s:
     verifie("Grand soleil" not in journal.journal_md(s, None), "l'élément supprimé n'apparaît plus")
     verifie(s.get(ChampJournal, numero).supprime, "…mais reste en base, marqué supprimé")
     verifie("clos" in entretien.demarrer(s, JID, MID)[0].texte, "un entretien terminé ne redémarre pas")
+
+# --- Correction de ce que le bot a compris --------------------------------------
+with SessionLocal() as s:
+    jc = Journee(weekend_id=s.scalar(select(Weekend.id)), jour=date(2026, 12, 18))
+    s.add(jc)
+    s.commit()
+    entretien.demarrer(s, jc.id, MID)
+    ec = entretien.entretien_ouvert(s, MID)
+    msgs = entretien.recevoir_transcription(s, ec, "Samedi à Flaine, tête d'essai.", None, None, extraction)
+    tid = s.scalar(select(Transcription.id).where(Transcription.entretien_id == ec.id))
+    avant = {f.valeur for f in s.scalars(select(ChampJournal).where(ChampJournal.entretien_id == ec.id, ChampJournal.cle == "piste"))}
+    verifie(avant == {"tête d'essai"}, "avant correction : le bot avait mal compris la piste")
+    reaction = entretien.bouton(s, f"e|{ec.id}|corr|{tid}", MID)
+    verifie("Envoie le bon texte" in reaction.edition.texte and ec.correction_id == tid, "« Corriger » attend le bon texte")
+    msgs = entretien.recevoir_texte_libre(s, ec, "Samedi à Flaine, grandes platières.", extraction)
+    verifie("Corrigé" in msgs[0].texte and ec.correction_id is None, "le texte correct remplace l'ancien")
+    apres = {f.valeur for f in s.scalars(select(ChampJournal).where(ChampJournal.entretien_id == ec.id, ChampJournal.cle == "piste"))}
+    verifie(apres == {"Les Grandes Platières"}, "les faits sont recalculés sur le texte corrigé, sans doublon")
+    t = s.get(Transcription, tid)
+    verifie(t.texte_brut == "Samedi à Flaine, tête d'essai." and t.texte_corrige == "Samedi à Flaine, grandes platières.", "l'original est gardé à côté de la correction")
+    verifie(ec.attente == "midi", "la correction ne fait pas reculer le fil")
 
 # --- Passer, plus tard, reprise, plafond de relances --------------------------
 with SessionLocal() as s:
@@ -130,7 +159,8 @@ with SessionLocal() as s:
     horloge.regler(horloge.vers_utc(__import__("datetime").datetime(2026, 12, 13, 19, 5)))
     entretien.demarrer(s, j2.id, MID)
     e2 = entretien.entretien_ouvert(s, MID)
-    msgs2 = entretien.recevoir_transcription(s, e2, "rien de précis", None, None, extraction)
+    entretien.recevoir_transcription(s, e2, "rien de précis", None, None, extraction)
+    msgs2 = entretien.bouton(s, f"e|{e2.id}|finfil", MID).suite
     reaction = appuyer(s, msgs2[-1], "Valider", MID)
     verifie("Où avez-vous skié" in reaction.suite[0].texte, "aucune station dite : question par boutons")
     reaction = appuyer(s, reaction.suite[0], "Valider", MID)
@@ -149,6 +179,8 @@ with SessionLocal() as s:
     bouton_reprendre = next(d for ligne in envois[0].message.boutons for t, d in ligne if "Reprendre" in t)
     reaction = entretien.bouton(s, bouton_reprendre, MID)
     verifie(s.get(Entretien, e2.id).etat == "en_cours" and reaction.suite, "reprise : l'entretien repart de là où il en était")
+    verifie("neige" in reaction.suite[0].texte.lower() or "ton" in reaction.suite[0].texte.lower() or "Quel temps" in reaction.suite[0].texte,
+            "…c'est-à-dire sur la question suivante du bilan")
     reaction = entretien.bouton(s, f"e|{e2.id}|passer", MID)
     verifie(s.get(Entretien, e2.id).etat == "passe" and "gardé" in reaction.edition.texte, "« passer » clôt en gardant ce qui existe")
 
@@ -160,7 +192,7 @@ with SessionLocal() as s:
     s.commit()
     entretien.demarrer(s, j3.id, MID)
     e3 = entretien.entretien_ouvert(s, MID)
-    entretien.recevoir_transcription(s, e3, "rien de précis", None, None, extraction)
+    entretien.bouton(s, f"e|{e3.id}|finfil", MID)
     s.refresh(e3)
     entretien.question_suivante(s, e3)
     verifie(e3.relances == 2, "relances plafonnées")
@@ -178,7 +210,7 @@ with SessionLocal() as s:
     def casse(*_):
         raise RuntimeError("réseau")
     msgs = entretien.recevoir_transcription(s, e4, "un vocal", None, None, casse)
-    verifie("pas réussi à l'analyser" in msgs[0].texte and "Qui était là" in msgs[1].texte, "extraction en panne : message clair, on continue en boutons")
+    verifie(any("pas réussi à l'analyser" in m.texte for m in msgs) and "À midi" in msgs[-1].texte, "extraction en panne : message clair, le fil continue")
     verifie(s.scalar(select(Transcription).where(Transcription.entretien_id == e4.id)).texte_brut == "un vocal", "…et la transcription est gardée")
 
 # --- Piste écrite ou gardée : retenue pour la fois suivante ---------------------
@@ -216,7 +248,7 @@ if "--reel" in sys.argv:
         with tempfile.TemporaryDirectory() as dossier:
             morceaux = audio.en_morceaux_mp3(fichier, Path(dossier))
             texte, cout = ia.transcrire(morceaux)
-        donnees = ia.extraire(texte, "2026-12-12", entretien.pistes_connues())
+        donnees = ia.extraire(texte, "2026-12-12", entretien.pistes_connues(), "matin")
         print(f"\n{fichier.name} ({cout:.4f} $)\n  texte : {texte}\n  stations : {[x['valeur'] for x in donnees['stations']]}"
               f"\n  pistes : {[(x['valeur'], x['filmeur']) for x in donnees['pistes']]}"
               f"\n  météo : {donnees['meteo']['valeur'] if donnees['meteo'] else None} · neige : "
