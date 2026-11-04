@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from . import config
 from .amis import _maintenant_aware, aujourdhui, personne_par_prenom
-from .models import (Archive, ChampJournal, Chute, Defi, DefiVote, Element, Journee, Personne, Plat, Presence)
+from .models import (Archive, ChampJournal, Chute, Defi, DefiVote, Element, Journee, Morceau, Personne, Plat, Presence)
 from .rappels import Message
 
 SEPARATEUR = "\n§§\n"  # annonce / réponse cachée d'un quiz
@@ -29,7 +29,7 @@ class Annonce:
 TYPES = {
     "phrase": ("La phrase imposée", True, True, True),
     "chef": ("Le chef du soir", True, True, True),
-    "blind": ("Le blind test", False, False, False),
+    "blind": ("Le blind test", False, False, True),
     "quiz": ("Le quiz de la saison", False, True, True),
     "proces": ("Le procès", True, False, True),
     "gage": ("Le gage", True, True, True),
@@ -46,6 +46,7 @@ DESCRIPTIONS = {  # ce que fait réellement chaque défi : le briefing n'a le dr
     "gage": "une personne tirée au sort relève un gage au chalet ou au restaurant, jamais à ski, le groupe valide",
     "debat": "une question absurde à trancher pendant la prochaine montée de télésiège, le verdict est noté au journal",
     "pronostic": "une question sur la journée, chacun répond en privé le matin, le résultat est révélé au récap du soir",
+    "blind": "un morceau de la playlist du week-end, chacun devine qui l'a ajouté, la réponse se révèle ensuite",
     "dj": "une personne tirée au sort choisit la musique du trajet ou de la soirée, les autres la notent",
     "imitation": "chacun reçoit en privé un membre du groupe à imiter pendant le repas, les autres devinent",
 }
@@ -242,6 +243,19 @@ def lancer(session: Session, type_: str, generateur) -> Annonce | str:
         defi = _creer(session, type_, None, texte + SEPARATEUR + reponse.strip())
         return Annonce(texte, [[("💡 Réponse", f"d|{defi.id}|r"), ("🙋 J'avais bon", f"d|{defi.id}|1")]], defi_id=defi.id)
 
+    if type_ == "blind":
+        journee = session.scalar(select(Journee).where(Journee.jour == aujourdhui()))
+        morceaux = list(session.scalars(select(Morceau).where(Morceau.weekend_id == journee.weekend_id))) if journee else []
+        auteurs = {m.personne_id for m in morceaux}
+        if len(morceaux) < 2 or len(auteurs) < 2:
+            return "Il faut au moins deux morceaux ajoutés par deux personnes différentes (avec /son) pour jouer au blind test."
+        morceau = random.choice(morceaux)
+        texte = (f"🎧 {nom} — écoutez ce morceau (lien Spotify) : qui l'a ajouté ?\nhttps://open.spotify.com/track/{morceau.track_id}")
+        defi = _creer(session, "blind", None, texte + SEPARATEUR + str(morceau.personne_id))
+        candidats = session.scalars(select(Personne).where(Personne.id.in_(auteurs)).order_by(Personne.id))
+        boutons = [[(p.prenom, f"d|{defi.id}|{p.id}")] for p in candidats] + [[("💡 Révéler", f"d|{defi.id}|r")]]
+        return Annonce(texte, boutons, defi_id=defi.id)
+
     if type_ == "pronostic":
         element = tirer_element(session, "pronostic", None, generateur)
         texte = f"🔮 {nom} — {element.texte}\nChacun répond en privé, le résultat sera révélé au récap du soir."
@@ -289,6 +303,13 @@ def voter(session: Session, defi_id: int, votant: Personne, valeur: str) -> Mess
     defi = session.get(Defi, defi_id)
     if defi is None or defi.etat != "en_cours" or defi.type == "imitation":
         return None
+    if defi.type == "blind" and valeur == "r":
+        auteur = session.get(Personne, int(defi.contenu.split(SEPARATEUR)[1]))
+        bons = [session.get(Personne, v.personne_id).prenom for v in session.scalars(select(DefiVote).where(DefiVote.defi_id == defi.id))
+                if v.valeur == auteur.id]
+        defi.etat = "clos"
+        session.commit()
+        return Message(f"{_base(defi)}\n💡 C'était le morceau de {auteur.prenom}. Bien vu : {', '.join(bons) or 'personne'}.")
     if defi.type == "quiz" and valeur == "r":
         return Message(_base(defi) + _tally(session, defi, True),
                        [[("🙋 J'avais bon", f"d|{defi.id}|1")]])
@@ -302,6 +323,11 @@ def voter(session: Session, defi_id: int, votant: Personne, valeur: str) -> Mess
     session.commit()
     if defi.type == "pronostic":
         return Message("🔮 Réponse notée. Résultat au récap du soir.")
+    if defi.type == "blind":
+        votes = list(session.scalars(select(DefiVote).where(DefiVote.defi_id == defi.id)))
+        boutons = [[(session.get(Personne, i).prenom, f"d|{defi.id}|{i}")] for i in sorted({m.personne_id for m in session.scalars(
+            select(Morceau).where(Morceau.weekend_id == session.get(Journee, defi.journee_id).weekend_id))})] + [[("💡 Révéler", f"d|{defi.id}|r")]]
+        return Message(_base(defi) + f"\n🗳 {len(votes)} réponse{'s' if len(votes) > 1 else ''}", boutons)
     boutons = {"phrase": _boutons_vote(defi.id, "✅ Fait", "❌ Raté"), "gage": _boutons_vote(defi.id, "✅ Fait", "❌ Raté"),
                "proces": _boutons_vote(defi.id, "🔨 Coupable", "🕊 Innocent"), "chef": _boutons_note(defi.id), "dj": _boutons_note(defi.id),
                "quiz": [[("💡 Réponse", f"d|{defi.id}|r"), ("🙋 J'avais bon", f"d|{defi.id}|1")]]}[defi.type]

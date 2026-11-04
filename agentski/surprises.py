@@ -34,6 +34,7 @@ class Evenement:
     destinataire: int | str  # « groupe » ou l'identifiant Telegram d'une personne
     texte: str
     media: tuple[str, str] | None = None  # (type, file_id)
+    boutons: list | None = None  # lignes de (libellé, données), comme un Message
 
 
 # --- Ajout d'une archive ----------------------------------------------------------------

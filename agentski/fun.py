@@ -119,9 +119,10 @@ async def commande_anniversaire(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 def _evenements() -> list[surprises.Evenement]:
-    from . import briefing
+    from . import agenda, briefing
     with SessionLocal() as session:
-        return surprises.evenements(session, ia.creatif) + briefing.evenements_meteo(session, ia.creatif)
+        return (surprises.evenements(session, ia.creatif) + briefing.evenements_meteo(session, ia.creatif)
+                + agenda.question_alix(session))
 
 
 async def envoyer_evenements(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -132,10 +133,11 @@ async def envoyer_evenements(context: ContextTypes.DEFAULT_TYPE) -> None:
             groupe = amis.groupe_id(session)
         for e in evenements:
             chat = groupe if e.destinataire == "groupe" else e.destinataire
+            clavier = InlineKeyboardMarkup([[InlineKeyboardButton(t, callback_data=d) for t, d in ligne] for ligne in e.boutons]) if e.boutons else None
             if e.media:
                 await envoyer_media(context.bot, chat, *e.media, legende=e.texte)
             else:
-                await context.bot.send_message(chat, e.texte)
+                await context.bot.send_message(chat, e.texte, reply_markup=clavier)
     except Exception:
         log.exception("Échec des surprises du moment")
 

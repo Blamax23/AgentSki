@@ -2,3 +2,4 @@ python-telegram-bot[job-queue]>=22
 sqlalchemy>=2
 alembic
 python-dotenv
+icalendar

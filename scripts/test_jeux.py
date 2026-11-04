@@ -185,7 +185,7 @@ with SessionLocal() as s:
     verifie(len(cibles) == 3 and all(i != c for i, c in cibles.items()), "imitation : jamais soi-même")
     verifie(len(im.prives) == 3 and all("imiteras" in m.texte for _, m in im.prives), "imitation : cible envoyée en privé")
     verifie("imitait" in defis.reveler_imitation(s) and "Aucune imitation" in defis.reveler_imitation(s), "imitation : le récap révèle qui imitait qui, une fois")
-    verifie("Spotify" in defis.lancer(s, "blind", gen), "blind test : indisponible tant que Spotify n'est pas branché")
+    verifie("/son" in defis.lancer(s, "blind", gen), "blind test sans morceaux : on explique comment en ajouter (le jeu complet est testé avec Spotify)")
 
 # --- Couche Telegram ---------------------------------------------------------------------------------------
 def maj(uid, texte=None, args=(), chat="private"):
@@ -229,7 +229,7 @@ async def telegram():
 
     up, q = bouton(1, "df|blind")
     await jeux.bouton_lancer(up, maj(1)[1])
-    verifie("Spotify" in q.edit_message_text.call_args[0][0], "blind test : explication, rien n'est annoncé")
+    verifie("/son" in q.edit_message_text.call_args[0][0], "blind test impossible : explication, rien n'est annoncé")
 
     up, ctx = maj(2, chat="group")
     await jeux.commande_ajout(up, ctx)

@@ -140,7 +140,11 @@ def a_envoyer(session: Session) -> list[Envoi]:
             r.abandonne_a = maintenant()
             continue
         if r.type == "jeudi":
-            msg = ecran_jours(vers_paris(r.envoyer_a).date(), 0)
+            jeudi_ = vers_paris(r.envoyer_a).date()
+            from .agenda import jours_ski, masque_jours
+            vus = jours_ski(jeudi_)  # un événement « Ski » dans l'agenda : la question confirme au lieu de demander
+            msg = (ecran_jours(jeudi_, masque_jours(jeudi_, vus), "📅 Je vois « Ski » dans ton agenda : j'ai pré-coché les jours, valide ou corrige.")
+                   if vus else ecran_jours(jeudi_, 0))
         elif r.type == "note":
             from .amis import ecran_note
             msg = ecran_note(r.journee_id)
@@ -242,7 +246,10 @@ def repondre(session: Session, data: str) -> Message:
     if action == "vj":
         if jmask == 0:
             return ecran_jours(jeudi, 0, "Coche au moins un jour, ou réponds « Non ».")
-        return ecran_personnes(session, jeudi, jmask, 0)
+        from .agenda import alix_skie, reponse_alix
+        alix = session.scalar(select(Personne).where(Personne.prenom == "Alix"))  # Alix a dit qu'elle skiait : pré-cochée
+        deja = 1 << alix.id if alix is not None and alix_skie(reponse_alix(session, jeudi + timedelta(days=1))) else 0
+        return ecran_personnes(session, jeudi, jmask, deja)
     if action == "p":
         return ecran_personnes(session, jeudi, jmask, pmask)
     # vp : on enregistre

@@ -47,6 +47,12 @@ FLASH_PROBA = float(os.environ.get("FLASH_PROBA", "0.4"))
 BLASE_UNE_FOIS_SUR = int(os.environ.get("BLASE_UNE_FOIS_SUR", "50"))
 AIDE_NON_UNE_FOIS_SUR = int(os.environ.get("AIDE_NON_UNE_FOIS_SUR", "5"))
 
+# Connexions : renseignées dans .env, absentes = fonction désactivée avec un message clair
+AGENDA_ICAL_URL = os.environ.get("AGENDA_ICAL_URL", "")  # lien iCal privé en lecture de l'agenda de Maxime
+SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID", "")
+SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET", "")
+SPOTIFY_REFRESH_TOKEN = os.environ.get("SPOTIFY_REFRESH_TOKEN", "")
+
 # Question d'accès : dans .env, jamais dans le code. Sans réponse configurée, les inconnus sont ignorés.
 QUESTION_ACCES = os.environ.get("QUESTION_ACCES", "")
 REPONSE_ACCES = os.environ.get("REPONSE_ACCES", "")

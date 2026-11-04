@@ -320,3 +320,17 @@ class DefiVote(Base):
     defi_id: Mapped[int] = mapped_column(ForeignKey("defi.id"))
     personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
     valeur: Mapped[int] = mapped_column(Integer)
+
+
+class Morceau(Base):
+    """Morceau ajouté à la playlist du week-end : le blind test devine qui l'a proposé."""
+    __tablename__ = "morceau"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    weekend_id: Mapped[int | None] = mapped_column(ForeignKey("weekend.id"))
+    journee_id: Mapped[int | None] = mapped_column(ForeignKey("journee.id"))
+    personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    track_id: Mapped[str] = mapped_column(String(40))
+    titre: Mapped[str] = mapped_column(String(200))
+    artistes: Mapped[str] = mapped_column(String(200))
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

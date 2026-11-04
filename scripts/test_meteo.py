@@ -123,7 +123,7 @@ with SessionLocal() as s:
     evs = briefing.evenements_meteo(s, gen)
     verifie(len(evs) == 1 and evs[0].destinataire == "groupe" and evs[0].texte.startswith("📋"), "vendredi 18 h : briefing au groupe")
     verifie("Flaine" in vus["u"] and "Défis possibles" in vus["u"] and "rafales" in vus["u"], "le modèle reçoit les prévisions des stations et deux défis")
-    verifie("Spotify" not in vus["u"] and "blind" not in vus["u"].lower(), "…jamais le blind test, indisponible")
+    verifie(vus["u"].count("\n- ") == 2 and all(" : " in l for l in vus["u"].split("Défis possibles :")[1].strip().splitlines()), "…chaque défi proposé arrive avec sa description exacte")
     verifie(briefing.evenements_meteo(s, gen) == [], "…une seule fois")
     s.delete(s.get(Reglage, "briefing:2026-12-11"))
     s.commit()

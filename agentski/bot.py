@@ -12,7 +12,7 @@ from telegram.ext import (Application, ApplicationHandlerStop, CallbackQueryHand
 
 from sqlalchemy import select
 
-from . import acces, amis, audio, commandes, config, entretien, fun, ia, jeux, journal, previsions, rappels, simulation
+from . import acces, amis, audio, commandes, config, entretien, fun, ia, integrations, jeux, journal, previsions, rappels, simulation
 from .db import SessionLocal, seed_personnes, sync_allowed_users
 from .models import Personne
 
@@ -242,6 +242,20 @@ async def tic(context: ContextTypes.DEFAULT_TYPE) -> None:
             rappels.marquer_envoye(session, envoi.rappel_id)
 
 
+MENU = [("moment", "Poser un marqueur dans la journée"), ("chute", "Noter une chute"), ("citation", "Garder une phrase culte"),
+        ("journal", "Relire le journal d'un week-end"), ("info", "Conditions d'une station"), ("meteo", "Prévisions d'une station"),
+        ("avalanche", "Risque d'avalanche"), ("pointmeteo", "Point météo chaque matin"), ("defi", "Lancer un défi"),
+        ("ajout", "Alimenter les réserves de défis"), ("easter", "Ajouter une archive surprise"), ("chambre", "Une archive tout de suite"),
+        ("idee", "La boîte à idées"), ("suggestion", "Idées trouvées sur le web"), ("pari", "Lancer un pari"), ("paris", "Les paris en cours"),
+        ("course", "La liste de courses"), ("son", "Ajouter un morceau à la playlist"), ("ics", "Les sorties dans ton agenda"),
+        ("capsule", "Remplir ta capsule temporelle"), ("aide", "Ce que je sais faire")]
+# Cachées, volontairement absentes du menu : /verte, /raclette et 🧀, /groupe, /revelation, /resolu, /resultat, /verdict, /imitation, /retirer
+
+
+async def declarer_menu(app) -> None:
+    await app.bot.set_my_commands(MENU)
+
+
 def main() -> None:
     logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s %(message)s", level=logging.INFO)
     logging.getLogger("httpx").setLevel(logging.WARNING)  # ses logs contiennent le token dans l'URL
@@ -249,12 +263,13 @@ def main() -> None:
         seed_personnes(session)
         sync_allowed_users(session)
 
-    app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+    app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).post_init(declarer_menu).build()
     app.add_handler(TypeHandler(Update, liste_blanche), group=-1)
     commandes.installer(app)
     fun.installer(app)
     jeux.installer(app)
     previsions.installer(app)
+    integrations.installer(app)
     simulation.installer(app)  # fausses commandes, à retirer au gel de l'étape 4
     app.add_handler(CallbackQueryHandler(bouton_jeudi, pattern=r"^j\|"))
     app.add_handler(CallbackQueryHandler(bouton_entretien, pattern=r"^e\|"))
