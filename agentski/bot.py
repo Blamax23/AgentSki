@@ -247,7 +247,7 @@ MENU = [("moment", "Poser un marqueur dans la journée"), ("chute", "Noter une c
         ("avalanche", "Risque d'avalanche"), ("pointmeteo", "Point météo chaque matin"), ("defi", "Lancer un défi"),
         ("ajout", "Alimenter les réserves de défis"), ("easter", "Ajouter une archive surprise"), ("chambre", "Une archive tout de suite"),
         ("idee", "La boîte à idées"), ("suggestion", "Idées trouvées sur le web"), ("pari", "Lancer un pari"), ("paris", "Les paris en cours"),
-        ("course", "La liste de courses"), ("son", "Ajouter un morceau à la playlist"), ("ics", "Les sorties dans ton agenda"),
+        ("course", "La liste de courses"), ("son", "Ajouter un morceau à la playlist"), ("play", "Lancer un morceau sur l'appareil Spotify actif"), ("pause", "Mettre la musique en pause"), ("ics", "Les sorties dans ton agenda"),
         ("capsule", "Remplir ta capsule temporelle"), ("aide", "Ce que je sais faire")]
 # Cachées, volontairement absentes du menu : /verte, /raclette et 🧀, /groupe, /revelation, /resolu, /resultat, /verdict, /imitation, /retirer
 

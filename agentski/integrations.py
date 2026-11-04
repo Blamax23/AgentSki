@@ -22,6 +22,14 @@ async def commande_son(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(reponse)
 
 
+async def commande_play(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(await asyncio.to_thread(spotify.lancer_musique, " ".join(context.args)))
+
+
+async def commande_pause(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(await asyncio.to_thread(spotify.mettre_en_pause))
+
+
 async def lien_spotify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Un lien Spotify collé dans le groupe est ajouté à la playlist, sans commande."""
     if not spotify.configure():
@@ -56,6 +64,8 @@ async def bouton_alix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 def installer(app) -> None:
     app.add_handler(CommandHandler("son", commande_son))
+    app.add_handler(CommandHandler("play", commande_play))
+    app.add_handler(CommandHandler("pause", commande_pause))
     app.add_handler(CommandHandler("ics", commande_ics))
     app.add_handler(CallbackQueryHandler(bouton_alix, pattern=r"^al\|"))
     app.add_handler(MessageHandler(filters.Regex(spotify.LIEN) & ~filters.COMMAND, lien_spotify))

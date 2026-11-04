@@ -12,6 +12,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 os.environ["DATABASE_PATH"] = str(Path(tempfile.mkdtemp()) / "integrations.db")
+for _cle in ("SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET", "SPOTIFY_REFRESH_TOKEN", "AGENDA_ICAL_URL"):
+    os.environ[_cle] = ""  # les tests ne touchent jamais aux vrais comptes configurés dans .env (load_dotenv ne remplace pas une variable déjà définie)
+if "--reel" not in sys.argv:
+    os.environ["OPENROUTER_API_KEY"] = "cle-de-test"  # un appel involontaire à OpenRouter échouerait au lieu de coûter de l'argent
 os.environ["ALLOWED_USERS"] = "1:Maxime"
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -44,6 +48,9 @@ def ics(*evenements):
     corps = "".join(f"BEGIN:VEVENT\nUID:{i}\nDTSTAMP:20260101T000000Z\nSUMMARY:{titre}\n{dates}\nEND:VEVENT\n" for i, (titre, dates) in enumerate(evenements))
     return f"BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//test//FR\n{corps}END:VCALENDAR\n"
 
+
+verifie(not config.SPOTIFY_CLIENT_ID and not config.AGENDA_ICAL_URL and config.OPENROUTER_API_KEY == "cle-de-test",
+        "garde-fou : les tests n'ont accès à aucun vrai compte (Spotify, agenda, OpenRouter)")
 
 # --- Agenda --------------------------------------------------------------------------------------------
 jeudi = date(2026, 12, 10)
@@ -184,9 +191,77 @@ with SessionLocal() as s:
     verifie(f"Bien vu : {', '.join(bons)}" in rev.texte or "Bien vu : personne" in rev.texte, "…et ceux qui ont trouvé")
     verifie(defis.voter(s, defi.id, adr, "1") is None, "un blind test révélé est clos")
 
+# --- Lecture : /play et /pause ------------------------------------------------------------------------------------
+appels = []
+etat = {"appareils": [], "erreur": None}
+def http_lecture(methode, url, entetes, corps=None):
+    appels.append((methode, url, corps))
+    if "accounts.spotify.com" in url:
+        return {"access_token": "AT2", "expires_in": 3600}
+    if etat["erreur"] and "/me/player/" in url and methode == "PUT":
+        raise spotify.SpotifyErreur(etat["erreur"], "x")
+    if url.startswith(spotify.API + "/search"):
+        return {"tracks": {"items": [{"id": "T1", "uri": "spotify:track:T1", "name": "Get Lucky", "artists": [{"name": "Daft Punk"}]}]}}
+    if url.endswith("/me/player/devices"):
+        return {"devices": etat["appareils"]}
+    if "/tracks/" in url:
+        return {"id": url.rsplit("/", 1)[1], "uri": "spotify:track:" + url.rsplit("/", 1)[1], "name": "Get Lucky", "artists": [{"name": "Daft Punk"}]}
+    return {}
+
+spotify._jeton.update(valeur=None, expire=0.0)
+ecouteurs = {"id": "D1", "name": "iPhone de Maxime", "is_active": True, "is_restricted": False}
+salon = {"id": "D2", "name": "Enceinte du salon", "is_active": False, "is_restricted": False}
+etat["appareils"] = [ecouteurs, salon]
+rep = spotify.lancer_musique("Daft Punk Get Lucky", http_lecture)
+play = [c for c in appels if c[0] == "PUT"][-1]
+verifie("Lecture sur iPhone de Maxime : Get Lucky — Daft Punk" in rep, "/play titre : lancé sur l'appareil actif")
+verifie(play[1] == spotify.API + "/me/player/play" and json.loads(play[2]) == {"uris": ["spotify:track:T1"]}, "…par PUT /me/player/play avec l'URI, sans device_id : l'appareil actif est utilisé")
+appels.clear()
+verifie("Lecture sur iPhone de Maxime" in spotify.lancer_musique("", http_lecture) and [c for c in appels if c[0] == "PUT"][-1][2] == b"", "/play sans titre : reprend la lecture, corps vide mais présent")
+appels.clear()
+etat["appareils"] = [dict(salon)]
+rep = spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http_lecture)
+verifie("device_id=D2" in [c for c in appels if c[0] == "PUT"][-1][1] and "Enceinte du salon" in rep, "aucun appareil actif mais un seul disponible : visé par son identifiant")
+appels.clear()
+etat["appareils"] = [dict(ecouteurs, is_active=False), dict(salon)]
+rep = spotify.lancer_musique("Get Lucky", http_lecture)
+verifie("Plusieurs appareils" in rep and "iPhone" in rep and "Enceinte" in rep and not [c for c in appels if c[0] == "PUT"], "plusieurs appareils, aucun actif : on liste et on ne devine pas")
+etat["appareils"] = []
+verifie("Aucun appareil Spotify" in spotify.lancer_musique("Get Lucky", http_lecture), "aucun appareil : on explique comment le réveiller")
+etat["appareils"] = [dict(ecouteurs, is_restricted=True)]
+verifie("Aucun appareil Spotify" in spotify.lancer_musique("", http_lecture), "appareil qui n'accepte aucune commande : écarté")
+etat["appareils"] = [ecouteurs]
+etat["erreur"] = 403
+rep = spotify.lancer_musique("", http_lecture)
+verifie("Premium" in rep and "spotify_autoriser" in rep, "refus 403 : Premium ou autorisation manquante, avec la marche à suivre")
+etat["erreur"] = 429
+verifie("attendre" in spotify.lancer_musique("", http_lecture), "limite de débit : on demande d'attendre")
+etat["erreur"] = 500
+verifie("ne répond pas comme prévu" in spotify.lancer_musique("", http_lecture), "autre erreur : message clair")
+etat["erreur"] = None
+verifie("Je ne trouve pas" in spotify.lancer_musique("zzz", lambda m, u, e, c=None: {"tracks": {"items": []}} if "/search" in u else http_lecture(m, u, e, c)), "titre introuvable : rien n'est lancé")
+appels.clear()
+verifie("en pause" in spotify.mettre_en_pause(http_lecture) and appels[-1][1] == spotify.API + "/me/player/pause" and appels[-1][0] == "PUT", "/pause : PUT /me/player/pause")
+etat["erreur"] = 404
+verifie("Rien n'est en cours" in spotify.mettre_en_pause(http_lecture), "/pause sans appareil actif : message clair")
+etat["erreur"] = 403
+verifie("Premium" in spotify.mettre_en_pause(http_lecture), "/pause refusée : même explication")
+etat["erreur"] = None
+saved = config.SPOTIFY_CLIENT_ID
+config.SPOTIFY_CLIENT_ID = ""
+verifie("pas branché" in spotify.lancer_musique("x", http_lecture) and "pas branché" in spotify.mettre_en_pause(http_lecture), "Spotify non configuré : /play et /pause le disent")
+config.SPOTIFY_CLIENT_ID = saved
+
 # --- Couche Telegram ---------------------------------------------------------------------------------------------
 async def telegram():
     spotify.ajouter_morceau = lambda session, personne, texte, http=None: f"AJOUT:{texte}"
+    spotify.lancer_musique = lambda texte, http=None: f"PLAY:{texte}"
+    spotify.mettre_en_pause = lambda http=None: "PAUSE"
+    up = SimpleNamespace(message=SimpleNamespace(text=None, reply_text=AsyncMock()), effective_user=SimpleNamespace(id=1))
+    await integrations.commande_play(up, SimpleNamespace(args=["Get", "Lucky"]))
+    verifie(up.message.reply_text.call_args[0][0] == "PLAY:Get Lucky", "/play Get Lucky depuis Telegram")
+    await integrations.commande_pause(up, SimpleNamespace(args=[]))
+    verifie(up.message.reply_text.call_args[0][0] == "PAUSE", "/pause depuis Telegram")
     up = SimpleNamespace(message=SimpleNamespace(text="https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", reply_text=AsyncMock()), effective_user=SimpleNamespace(id=1))
     await integrations.lien_spotify(up, SimpleNamespace(args=[]))
     verifie("AJOUT:https://open" in up.message.reply_text.call_args[0][0], "lien collé dans le groupe : ajouté sans commande")

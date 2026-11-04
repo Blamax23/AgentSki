@@ -1,4 +1,4 @@
-"""Autorise le bot à gérer des playlists sur ton compte Spotify (une seule fois, sur ton Mac) et écrit SPOTIFY_REFRESH_TOKEN dans .env.
+"""Autorise le bot à gérer des playlists et à commander la lecture (/play, /pause) sur ton compte Spotify (une seule fois, sur ton Mac) et écrit SPOTIFY_REFRESH_TOKEN dans .env.
 
 Avant : crée une application sur https://developer.spotify.com/dashboard (compte Premium requis), ajoute l'adresse
 http://127.0.0.1:8888/callback comme « Redirect URI », puis mets SPOTIFY_CLIENT_ID et SPOTIFY_CLIENT_SECRET dans .env.
@@ -39,7 +39,7 @@ class Reception(BaseHTTPRequestHandler):
         pass
 
 webbrowser.open("https://accounts.spotify.com/authorize?" + urllib.parse.urlencode({
-    "client_id": client_id, "response_type": "code", "redirect_uri": REDIRECTION, "scope": "playlist-modify-private playlist-modify-public"}))
+    "client_id": client_id, "response_type": "code", "redirect_uri": REDIRECTION, "scope": "playlist-modify-private playlist-modify-public user-modify-playback-state user-read-playback-state"}))
 serveur = HTTPServer(("127.0.0.1", 8888), Reception)
 serveur.handle_request()
 if "code" not in code:

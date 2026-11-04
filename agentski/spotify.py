@@ -2,6 +2,7 @@
 
 Appels vérifiés sur la documentation officielle : POST /me/playlists, POST /playlists/{id}/items, GET /search (10 résultats
 au plus), renouvellement du jeton par POST accounts.spotify.com/api/token. L'aperçu audio n'existe plus (preview_url est abandonné).
+Lecture : PUT /me/player/play et /me/player/pause, GET /me/player/devices (Premium, appareil Spotify actif).
 Mode développeur : le propriétaire de l'application doit avoir Spotify Premium, 5 utilisateurs au plus."""
 import base64
 import json
@@ -28,6 +29,14 @@ class SpotifyAbsent(Exception):
     """Spotify n'est pas configuré."""
 
 
+class SpotifyErreur(RuntimeError):
+    """Réponse d'erreur de Spotify, avec son code HTTP."""
+
+    def __init__(self, code: int, corps: str):
+        super().__init__(f"Spotify {code} : {corps}")
+        self.code = code
+
+
 def configure() -> bool:
     return bool(config.SPOTIFY_CLIENT_ID and config.SPOTIFY_CLIENT_SECRET and config.SPOTIFY_REFRESH_TOKEN)
 
@@ -44,7 +53,7 @@ def _http(methode: str, url: str, entetes: dict, corps: bytes | None = None) -> 
             brut = r.read()
             return json.loads(brut) if brut else {}
     except urllib.error.HTTPError as e:
-        raise RuntimeError(f"Spotify {e.code} : {e.read().decode()[:200]}") from None
+        raise SpotifyErreur(e.code, e.read().decode()[:200]) from None
 
 
 def jeton_acces(http=_http) -> str:
@@ -64,8 +73,8 @@ def jeton_acces(http=_http) -> str:
 
 
 def _api(methode: str, chemin: str, corps: dict | None = None, http=_http) -> dict:
-    return http(methode, f"{API}{chemin}", {"Authorization": f"Bearer {jeton_acces(http)}", "Content-Type": "application/json"},
-                json.dumps(corps).encode() if corps is not None else None)
+    donnees = json.dumps(corps).encode() if corps is not None else (b"" if methode != "GET" else None)  # Spotify veut un Content-Length, même vide
+    return http(methode, f"{API}{chemin}", {"Authorization": f"Bearer {jeton_acces(http)}", "Content-Type": "application/json"}, donnees)
 
 
 def chercher_titre(recherche: str, http=_http) -> dict | None:
@@ -123,3 +132,71 @@ def ajouter_morceau(session: Session, auteur: Personne, texte: str, http=_http) 
                              detail=auteur.prenom, verifie=True))
     session.commit()
     return f"🎵 Ajouté à la playlist : {piste['name']} — {artistes}"
+
+
+# --- Lecture sur un appareil Spotify -------------------------------------------------------------------------------
+
+def _erreur_lecture(e: SpotifyErreur) -> str:
+    if e.code == 403:
+        return ("Spotify refuse : soit il manque l'autorisation de lecture (relance scripts/spotify_autoriser.py), "
+                "soit le compte n'est pas Premium, qui est obligatoire pour commander la lecture.")
+    if e.code == 429:
+        return "Spotify demande d'attendre un peu : réessaie dans une minute."
+    return "Spotify ne répond pas comme prévu pour l'instant : réessaie dans un moment."
+
+
+def _choisir_appareil(appareils: list[dict]) -> tuple[dict | None, str]:
+    """L'appareil actif, ou le seul disponible ; sinon None et le message qui explique quoi faire."""
+    libres = [a for a in appareils if not a.get("is_restricted")]
+    actif = next((a for a in libres if a.get("is_active")), None)
+    if actif:
+        return actif, ""
+    if len(libres) == 1:
+        return libres[0], ""
+    if not libres:
+        return None, ("Aucun appareil Spotify trouvé : ouvre Spotify sur ton téléphone ou ton Mac, lance un morceau une seconde "
+                      "pour qu'il devienne l'appareil actif, puis réessaie.")
+    noms = ", ".join(a["name"] for a in libres)
+    return None, f"Plusieurs appareils Spotify ({noms}) mais aucun n'est actif : lance un morceau sur celui que tu veux, puis réessaie."
+
+
+def lancer_musique(auteur_texte: str, http=_http) -> str:
+    """/play [titre ou lien] : lance le morceau sur l'appareil Spotify actif ; sans argument, reprend la lecture.
+    Le son sort de l'appareil où Spotify est ouvert, jamais de Telegram ni du serveur."""
+    if not configure():
+        return "Spotify n'est pas branché : il faut créer une application et lancer scripts/spotify_autoriser.py."
+    texte = auteur_texte.strip()
+    try:
+        corps, titre = None, ""
+        if texte:
+            track_id = extraire_id(texte)
+            piste = lire_morceau(track_id, http) if track_id else chercher_titre(texte, http)
+            if piste is None:
+                return f"Je ne trouve pas « {texte} » sur Spotify."
+            corps = {"uris": [piste["uri"]]}
+            titre = f" : {piste['name']} — {', '.join(a['name'] for a in piste.get('artists', []))}"
+        appareils = _api("GET", "/me/player/devices", http=http).get("devices", [])
+        appareil, explication = _choisir_appareil(appareils)
+        if appareil is None:
+            return explication
+        chemin = "/me/player/play" + ("" if appareil.get("is_active") else f"?device_id={urllib.parse.quote(appareil['id'])}")
+        _api("PUT", chemin, corps, http)
+    except SpotifyAbsent:
+        return "Spotify n'est pas configuré."
+    except SpotifyErreur as e:
+        return _erreur_lecture(e)
+    except Exception:
+        return "Spotify ne répond pas pour l'instant : réessaie dans un moment."
+    return f"▶️ Lecture sur {appareil['name']}{titre}"
+
+
+def mettre_en_pause(http=_http) -> str:
+    if not configure():
+        return "Spotify n'est pas branché : il faut créer une application et lancer scripts/spotify_autoriser.py."
+    try:
+        _api("PUT", "/me/player/pause", http=http)
+    except SpotifyErreur as e:
+        return _erreur_lecture(e) if e.code != 404 else "Rien n'est en cours de lecture sur un appareil Spotify actif."
+    except Exception:
+        return "Spotify ne répond pas pour l'instant : réessaie dans un moment."
+    return "⏸ Musique en pause."
