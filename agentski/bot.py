@@ -257,6 +257,8 @@ async def declarer_menu(app) -> None:
 
 
 def main() -> None:
+    if not config.TELEGRAM_BOT_TOKEN:
+        raise SystemExit("Il manque TELEGRAM_BOT_TOKEN. Copie ton fichier .env à la racine du projet (modèle : .env.exemple).")
     logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s %(message)s", level=logging.INFO)
     logging.getLogger("httpx").setLevel(logging.WARNING)  # ses logs contiennent le token dans l'URL
     with SessionLocal() as session:

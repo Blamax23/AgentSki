@@ -6,9 +6,10 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
-TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")  # exigé au démarrage du bot, pas à l'import : les tests n'en ont pas besoin
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 DATABASE_PATH = ROOT / os.environ.get("DATABASE_PATH", "data/agentski.db")
+DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)  # data/ n'est pas dans git : absent sur un PC neuf
 
 
 # Les personnes de la série. L'organisateur reçoit la question du jeudi et les rappels.
