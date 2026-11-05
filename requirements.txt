@@ -3,3 +3,4 @@ sqlalchemy>=2
 alembic
 python-dotenv
 icalendar
+fitparse

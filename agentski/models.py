@@ -334,3 +334,25 @@ class Morceau(Base):
     titre: Mapped[str] = mapped_column(String(200))
     artistes: Mapped[str] = mapped_column(String(200))
     cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Chrono(Base):
+    """Chrono sur une piste repère, relevé à la main : un des repères que tout le monde peut produire."""
+    __tablename__ = "chrono"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    journee_id: Mapped[int | None] = mapped_column(ForeignKey("journee.id"))
+    piste: Mapped[str] = mapped_column(String(100))
+    secondes: Mapped[int] = mapped_column(Integer)
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Episode(Base):
+    """Épisode publié sur YouTube, pour /vues."""
+    __tablename__ = "episode"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    titre: Mapped[str] = mapped_column(String(200))
+    video_id: Mapped[str] = mapped_column(String(20), unique=True)
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

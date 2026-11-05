@@ -50,6 +50,7 @@ AIDE_NON_UNE_FOIS_SUR = int(os.environ.get("AIDE_NON_UNE_FOIS_SUR", "5"))
 
 # Connexions : renseignées dans .env, absentes = fonction désactivée avec un message clair
 AGENDA_ICAL_URL = os.environ.get("AGENDA_ICAL_URL", "")  # lien iCal privé en lecture de l'agenda de Maxime
+YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")  # clé d'API Google (YouTube Data API v3), pour /vues
 SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID", "")
 SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET", "")
 SPOTIFY_REFRESH_TOKEN = os.environ.get("SPOTIFY_REFRESH_TOKEN", "")

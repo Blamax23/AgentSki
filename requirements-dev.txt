@@ -1,0 +1,2 @@
+# Pour les tests : génère de vrais fichiers FIT de test
+fit-tool
