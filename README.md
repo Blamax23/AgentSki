@@ -22,4 +22,5 @@ cp .env.exemple .env      # puis remplir .env
 Deux bots avec le même token se disputent les messages (erreur « Conflict »). Arrêter l'ancien avant de lancer le nouveau.
 
 ## Tests
-`./scripts/tout_tester.sh` : aucun test ne contacte un vrai compte (Spotify, agenda, OpenRouter).
+`pip install -r requirements-dev.txt` une fois (il génère de vrais fichiers FIT de test), puis `./scripts/tout_tester.sh` : aucun test
+ne contacte un vrai compte (Spotify, agenda, YouTube, OpenRouter). Les cartes OpenStreetMap et la météo ne sont appelées qu'en usage réel.
