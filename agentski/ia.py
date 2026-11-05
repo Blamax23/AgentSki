@@ -112,6 +112,24 @@ def economique(systeme: str, utilisateur: str, max_tokens: int = 2000) -> str:
     return texte
 
 
+def decrire_image(octets: bytes, legende: str | None = None) -> str:
+    """Description courte d'une photo, pour que Krok s'en souvienne dans la conversation. Rien n'est gardé côté serveur : seul le texte l'est."""
+    import base64
+    url = "data:image/jpeg;base64," + base64.b64encode(octets).decode()
+    consigne = ("Décris cette image en français, en deux à quatre phrases factuelles : ce qu'on voit, le décor, l'ambiance, tout texte lisible. "
+                "N'identifie personne d'après son visage : dis « une personne », « deux skieurs »… Si une légende est fournie, elle donne le contexte.")
+    r = _appeler("chat/completions", {
+        "model": config.MODELE_EXTRACTION, "temperature": 0.2, "max_tokens": 500, "provider": {"zdr": True}, "reasoning": {"effort": "low"},
+        "messages": [{"role": "user", "content": [
+            {"type": "text", "text": consigne + (f"\nLégende : {legende}" if legende else "")},
+            {"type": "image_url", "image_url": {"url": url}}]}]}, delai=60)
+    choix = r["choices"][0]
+    texte = (choix["message"].get("content") or "").strip()
+    if not texte:
+        raise RuntimeError("description vide")
+    return texte
+
+
 def recherche_web(demande: str, max_resultats: int = 3) -> tuple[str, list[str]]:
     """Réponse du modèle créatif appuyée sur une recherche web, avec les adresses citées.
     Le ZDR ne couvre pas la recherche : `demande` ne doit contenir aucune donnée personnelle."""

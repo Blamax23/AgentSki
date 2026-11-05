@@ -158,6 +158,19 @@ async def telegram():
     with SessionLocal() as s:
         verifie(s.scalar(select(Media).where(Media.file_id == "P2")) is not None, "photo : la plus grande taille est rangée")
 
+    # photo dans le groupe : Krok la décrit et la garde en mémoire
+    from agentski import ia
+    from agentski.models import Souvenir
+    ia.decrire_image = lambda octets, legende=None: "un chalet sous la neige"
+    fichier = SimpleNamespace(file_id="P3", file_size=2000, get_file=AsyncMock(return_value=SimpleNamespace(download_as_bytearray=AsyncMock(return_value=bytearray(b"xx")))))
+    up, ctx = maj(2, photo=[fichier], caption="Vue du chalet", chat="group")
+    ctx.bot.username, ctx.bot.id = "krok_bot", 1
+    await commandes.media(up, ctx)
+    with SessionLocal() as s:
+        sv = s.scalar(select(Souvenir).where(Souvenir.texte.contains("chalet sous la neige")))
+        verifie(sv is not None and sv.lieu == "groupe" and sv.role == "amb", "photo du groupe : description gardée dans la mémoire de Krok")
+    verifie(up.message.reply_text.await_count == 1, "photo non adressée à Krok : il ne commente pas")
+
     up, ctx = maj(2, "Une phrase")
     with SessionLocal() as s:
         note = s.scalar(select(Note))

@@ -5,7 +5,7 @@ et pas seulement parce que la consigne le demande : le groupe n'a tout simplemen
 /oublie efface tout ce qu'il a de soi, privé et groupe. Cœur indépendant de Telegram : les modèles sont passés en paramètre."""
 import random
 import re
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -16,6 +16,8 @@ from .horloge import maintenant, vers_paris, vers_utc
 from .models import Memoire, Personne, Reglage, Souvenir
 
 HISTORIQUE = 12          # messages récents remis au modèle à chaque réponse
+HISTORIQUE_GROUPE = 30   # dans le groupe, il voit aussi ce que les autres se disent : il lui faut plus de recul
+GARDE_AMBIANCE_JOURS = 3  # les messages du groupe qui ne lui étaient pas adressés ne sont gardés que quelques jours
 RESUME_TOUS_LES = 8      # messages échangés entre deux mises à jour de la mémoire résumée
 LIMITE_PAR_JOUR = 60     # messages par personne et par jour : un garde-fou de coût, et de politesse
 
@@ -25,7 +27,8 @@ Style : français parlé, court (une à quatre phrases), pas de liste ni de titr
 Confidentialité : ce que quelqu'un te confie en privé reste entre vous. Tu ne le répètes jamais à une autre personne ni dans le groupe, sauf si la personne te le demande.
 Tu ne décides pas de l'histoire de la série et tu n'aides pas au montage (dérushage, sous-titres, brouillon de voix off, titres) : si on te le demande, tu refuses gentiment, le montage étant le travail de Maxime.
 Tu n'inventes pas d'actions que tu n'as pas faites (rien sur Spotify, l'agenda ou le journal sans qu'on te l'ait fait faire par une commande) et tu n'inventes pas de souvenirs absents de ta mémoire.
-Dans l'historique, un message de toi qui commence par « [à la commande /... , j'ai envoyé :] » est un texte que tu as vraiment envoyé quand quelqu'un a lancé cette commande : tu sais donc ce qu'il contient et tu peux en parler. N'écris jamais ce préfixe toi-même."""
+Dans l'historique, un message de toi qui commence par « [à la commande /... , j'ai envoyé :] » est un texte que tu as vraiment envoyé quand quelqu'un a lancé cette commande : tu sais donc ce qu'il contient et tu peux en parler. N'écris jamais ce préfixe toi-même.
+Tu vois aussi les messages récents du groupe, même ceux qui ne t'étaient pas adressés, et les photos : un texte entre crochets comme « [photo envoyée par Adrien : … ] » est la description d'une image que tu as réellement vue. Tu peux en parler comme si tu la regardais, et tu ne dis jamais que tu n'as reçu aucune image quand une telle description figure dans l'historique. Une vidéo n'est pas analysée : tu sais seulement qu'elle a été envoyée."""
 
 STYLE_ACHILLE = """MODE ACHILLE, activé pour jouer. Tu restes Krok, mais tu parles comme Achille, un pote du groupe, pour faire rire. Tout le monde sait que c'est un jeu : tu ne prétends jamais être vraiment Achille et tu ne parles jamais en son nom pour t'engager à quoi que ce soit.
 Ses manières de parler :
@@ -43,9 +46,9 @@ CHANCE_DISNEY = 0.3
 CONSIGNE_DISNEY = ("Cette fois, si on te demande de faire quelque chose, tu préfères aller à Disney : tu le dis à ta façon, avec ton accent, "
                    "comme une excuse ou une envie soudaine, au lieu de le faire ou d'être simplement flemmard.")
 
-ANNONCES_ACHILLE = ["cv cv collègue, mode Achille activé tia. Il y a c't'ambiance, mais bon, je fais ça sans trop forcer frr.",
-                    "cv, vé, c'est parti en mode Achille, collègue. Genre je suis déjà fatigué mais cv.",
-                    "Té, mode Achille activé, frérot. J'ai capté, on y va tranquille, peuchère."]
+ANNONCES_ACHILLE = ["cv cv collègue, mode Achille activé tia. Il y a c't'ambiance, mais bon, je fais ça sans trop forcer frr. (/krok pour me remettre normal.)",
+                    "cv, vé, c'est parti en mode Achille, collègue. Genre je suis déjà fatigué mais cv. (/krok pour me remettre normal.)",
+                    "Té, mode Achille activé, frérot. J'ai capté, on y va tranquille, peuchère. (/krok pour me remettre normal.)"]
 
 
 # --- Mode Achille, humeur, mémoire ----------------------------------------------------------------------------------
@@ -78,7 +81,8 @@ def _souvenirs(session: Session, personne: Personne, lieu: str) -> list[Souvenir
     requete = select(Souvenir).where(Souvenir.lieu == lieu)
     if lieu == "prive":
         requete = requete.where(Souvenir.personne_id == personne.id)  # le privé n'est que la conversation de cette personne
-    return list(reversed(list(session.scalars(requete.order_by(Souvenir.id.desc()).limit(HISTORIQUE)))))
+    limite = HISTORIQUE_GROUPE if lieu == "groupe" else HISTORIQUE
+    return list(reversed(list(session.scalars(requete.order_by(Souvenir.id.desc()).limit(limite)))))
 
 
 def _resume(session: Session, personne: Personne, lieu: str) -> str:
@@ -127,6 +131,14 @@ def composer(session: Session, personne: Personne, texte: str, lieu: str, achill
 def noter_commande(session: Session, personne: Personne, lieu: str, commande: str, texte: str) -> None:
     """Garde dans la mémoire courte ce que Krok vient d'envoyer par une commande, pour qu'il sache de quoi on parle ensuite."""
     session.add(Souvenir(personne_id=personne.id, lieu=lieu, role="bot", texte=f"[à la commande /{commande}, j'ai envoyé :] {texte}", cree_a=maintenant()))
+    session.commit()
+
+
+def noter_ambiance(session: Session, personne: Personne, lieu: str, texte: str) -> None:
+    """Garde un message du groupe qui ne s'adressait pas à Krok, ou la description d'une photo (rôle « amb » : ne compte pas dans la limite du jour)."""
+    limite = maintenant() - timedelta(days=GARDE_AMBIANCE_JOURS)
+    session.execute(delete(Souvenir).where(Souvenir.role == "amb", Souvenir.cree_a < limite))
+    session.add(Souvenir(personne_id=personne.id, lieu=lieu, role="amb", texte=texte, cree_a=maintenant()))
     session.commit()
 
 

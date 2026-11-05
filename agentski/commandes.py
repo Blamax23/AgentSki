@@ -66,6 +66,7 @@ AIDE = """Voilà ce que je sais faire :
 🤖 Krok
 /talk [message] : discuter (ou écris-moi directement)
 /achille : un mode… particulier
+/krok : revenir à la normale
 /oublie : effacer ce que Krok sait de toi (en privé)
 
 📎 Sans commande
@@ -175,6 +176,50 @@ async def media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     with SessionLocal() as session:
         reponse = amis.ranger_media(session, _personne(session, update), type_, fichier.file_id, fichier.file_size, m.caption)
     await m.reply_text(reponse)
+    await _faire_voir_a_krok(update, context, type_, fichier)
+
+
+TAILLE_MAX_ANALYSE = 5 * 1024 * 1024  # au-delà, on ne télécharge pas : la photo est gardée, mais pas décrite
+
+
+async def _faire_voir_a_krok(update: Update, context: ContextTypes.DEFAULT_TYPE, type_: str, fichier) -> None:
+    """Krok décrit la photo et la garde dans sa mémoire, pour pouvoir en parler ensuite. Une vidéo n'est pas analysée : il sait seulement qu'elle existe."""
+    import asyncio
+    import logging
+    from . import commandes_conversation, conversation, ia
+    m = update.message
+    prive = update.effective_chat.type == "private"
+    lieu = "prive" if prive else "groupe"
+    auteur = update.effective_user.first_name
+    legende = (m.caption or "").strip()
+    if type_ in ("photo", "document") and (type_ == "photo" or (m.document and (m.document.mime_type or "").startswith("image/"))):
+        if fichier.file_size and fichier.file_size > TAILLE_MAX_ANALYSE:
+            texte = f"[photo envoyée par {auteur}, trop lourde pour que je la regarde]"
+        else:
+            try:
+                octets = bytes(await (await fichier.get_file()).download_as_bytearray())
+                description = await asyncio.to_thread(ia.decrire_image, octets, legende or None)
+                texte = f"[photo envoyée par {auteur} : {description}]"
+            except Exception:
+                logging.getLogger("agentski").exception("Description de photo échouée")
+                return
+    elif type_ == "video":
+        texte = f"[vidéo envoyée par {auteur}, non analysée]"
+    else:
+        return
+    if legende:
+        texte += f" Légende : {legende}"
+    with SessionLocal() as session:
+        personne = _personne(session, update)
+        if personne is None:
+            return
+        if not prive and update.effective_chat.id != amis.groupe_id(session):
+            return
+        conversation.noter_ambiance(session, personne, lieu, texte)
+    adresse = conversation.adresse_a_krok(legende, context.bot.username, bool(m.reply_to_message and m.reply_to_message.from_user
+                                                                         and m.reply_to_message.from_user.id == context.bot.id)) if legende or m.reply_to_message else None
+    if adresse or (prive and legende.endswith("?")):
+        await commandes_conversation.converser(update, context, adresse or legende)
 
 
 async def commande_medias(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

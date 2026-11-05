@@ -262,6 +262,14 @@ async def telegram():
     up, ctx = maj(1)
     await jeux.commande_course(up, ctx)
     verifie("Courses pour" in up.message.reply_text.call_args[0][0], "/course : la liste")
+    from agentski import commandes_conversation, conversation as _conv
+    with SessionLocal() as s:
+        _conv.basculer_achille(s, 77, True)
+    up, ctx = maj(1)
+    up.effective_chat = SimpleNamespace(id=77, type="supergroup")
+    await commandes_conversation.commande_krok(up, ctx)
+    with SessionLocal() as s:
+        verifie(not _conv.mode_achille(s, 77) and "Mode Achille coupé" in up.message.reply_text.call_args[0][0], "/krok coupe le mode Achille")
     up, ctx = maj(1, args=["thème"])
     await jeux.commande_suggestion(up, ctx)
     verifie("exemple.fr" in up.message.reply_text.call_args[0][0], "/suggestion : réponse avec ses sources")

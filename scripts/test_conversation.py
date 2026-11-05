@@ -88,6 +88,23 @@ with SessionLocal() as s:
     _, msgs = conversation.composer(s, maxime, "c'est quoi ce site ?", "groupe", False)
     verifie(any("/adrille_rallye" in m["content"] and "https://exemple.test" in m["content"] for m in msgs if m["role"] == "assistant"),
             "commande : ce que Krok a envoyé figure dans l'historique qu'il reçoit")
+    # --- contexte du groupe : messages non adressés et photos décrites ---
+    conversation.noter_ambiance(s, adrien, "groupe", "On part à 9h demain ?")
+    conversation.noter_ambiance(s, adrien, "groupe", "[photo envoyée par Adrien : un skieur devant un panneau de piste noire]")
+    _, msgs = conversation.composer(s, maxime, "c'était quoi la photo ?", "groupe", False)
+    contenu = "\n".join(m["content"] for m in msgs)
+    verifie("On part à 9h demain" in contenu and "panneau de piste noire" in contenu, "groupe : Krok voit les messages non adressés et la description de la photo")
+    _, msgs_prive = conversation.composer(s, maxime, "salut", "prive", False)
+    verifie("panneau de piste noire" not in "\n".join(m["content"] for m in msgs_prive), "le contexte du groupe n'entre pas dans le privé")
+    avant = conversation._messages_du_jour(s, adrien)
+    conversation.noter_ambiance(s, adrien, "groupe", "autre message")
+    verifie(conversation._messages_du_jour(s, adrien) == avant, "le contexte ne compte pas dans la limite du jour")
+    ancien = s.scalar(select(Souvenir).where(Souvenir.texte == "On part à 9h demain ?"))
+    ancien.cree_a = conversation.maintenant() - conversation.timedelta(days=conversation.GARDE_AMBIANCE_JOURS + 1)
+    s.commit()
+    conversation.noter_ambiance(s, adrien, "groupe", "un de plus")
+    verifie(s.scalar(select(Souvenir).where(Souvenir.texte == "On part à 9h demain ?")) is None, "le contexte ancien est effacé")
+
     # --- mode Achille ---
     verifie(not conversation.mode_achille(s, 42), "Achille : désactivé par défaut")
     verifie(conversation.basculer_achille(s, 42) and conversation.mode_achille(s, 42), "Achille : /achille l'active")
