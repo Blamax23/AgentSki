@@ -4,3 +4,4 @@ alembic
 python-dotenv
 icalendar
 fitparse
+pillow

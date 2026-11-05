@@ -183,11 +183,6 @@ with SessionLocal() as s:
     trophees.calculer = lambda session: 0
     horloge.regler(horloge.vers_utc(datetime(2027, 3, 1, 12, 0)))
     amis.definir_reglage(s, "groupe_id", "-100")
-    from agentski.models import Journee as _J, Weekend as _W
-    amis.definir_reglage(s, "trophees_dernier", "2000-01-01T00:00:00")
-    verifie(trophees.evenements(s) == [], "annonces : rien hors d'un jour de ski, même avec des trophées en attente")
-    _w = _W(date_debut=datetime(2027, 3, 1).date(), date_fin=datetime(2027, 3, 1).date(), statut="confirme"); s.add(_w); s.flush()
-    s.add(_J(weekend_id=_w.id, jour=datetime(2027, 3, 1).date(), ski=True)); s.commit()
     ad_ = s.scalar(select(Personne).where(Personne.prenom == "Adrien"))
     s.add_all([Trophee(personne_id=ad_.id, code="pingouin", niveau=2), Trophee(personne_id=ad_.id, code="fidele", niveau=1),
                Trophee(personne_id=ad_.id, code="melomane", niveau=1), Trophee(personne_id=ad_.id, code="poete", niveau=2),
@@ -217,6 +212,26 @@ with SessionLocal() as s:
     evs = trophees.evenements(s)
     verifie(len(evs) == 1 and evs[0].destinataire == 1, "sans groupe enregistré : l'annonce part en privé à l'organisateur")
 
+
+    # --- badges illustrés ---
+    manquants = [f"{c}_{n}" for c, _, _, seuils, _ in trophees.CATALOGUE for n in (range(1, len(seuils) + 1) if seuils else [1]) if trophees.image(c, n) is None]
+    manquants += [f"vitrine_pleine_{n}" for n in (1, 2, 3) if trophees.image("vitrine_pleine", n) is None]
+    verifie(not manquants, f"badges : un JPEG pour chaque trophée et chaque palier ({manquants[:3]})")
+    verifie(trophees.image("inconnu", 1) is None, "badges : un code inconnu n'a pas d'image")
+    s.query(Trophee).delete()
+    s.add(Trophee(personne_id=ad_.id, code="pingouin", niveau=2))
+    s.commit()
+    amis.definir_reglage(s, "trophees_dernier", "2000-01-01T00:00:00")
+    amis.definir_reglage(s, "groupe_id", "-100")
+    evs = trophees.evenements(s)
+    verifie(len(evs) == 1 and evs[0].media and evs[0].media[0] == "fichier" and evs[0].media[1].endswith("pingouin_2.jpg"), "annonce : accompagnée du badge du palier atteint")
+    from io import BytesIO
+    from PIL import Image
+    octets = trophees.vitrine_image(s, ad_)
+    vitrine_img = Image.open(BytesIO(octets))
+    verifie(vitrine_img.format == "JPEG" and vitrine_img.width < 1100 and vitrine_img.height < 1600, "vitrine : une image JPEG de taille raisonnable pour Telegram")
+    verifie(trophees.vitrine_image(s, m) is not None, "vitrine : aussi pour quelqu'un sans aucun trophée (tous verrouillés)")
+
 trophees.calculer = vrai_calcul
 
 # --- Couche Telegram -------------------------------------------------------------------------------------------------
@@ -226,7 +241,8 @@ from unittest.mock import AsyncMock  # noqa: E402
 
 from agentski import commandes_stats  # noqa: E402
 
-up = SimpleNamespace(message=SimpleNamespace(reply_text=AsyncMock()), effective_user=SimpleNamespace(id=1))
+up = SimpleNamespace(message=SimpleNamespace(reply_text=AsyncMock(), reply_photo=AsyncMock()), effective_user=SimpleNamespace(id=1))
 asyncio.run(commandes_stats.commande_trophees(up, SimpleNamespace(args=[])))
 verifie("Tes trophées" in up.message.reply_text.call_args[0][0] or "Aucun trophée" in up.message.reply_text.call_args[0][0], "/trophees répond avec la vitrine de la personne")
+verifie(up.message.reply_photo.called and up.message.reply_photo.call_args[0][0][:2] == b"\xff\xd8", "/trophees envoie aussi l'image de la vitrine")
 print("\nTout passe.")

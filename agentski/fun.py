@@ -19,6 +19,10 @@ def _personne(session, update: Update):
 
 
 async def envoyer_media(bot, chat_id: int, type_: str, file_id: str, legende: str | None = None) -> None:
+    if type_ == "fichier":  # une image du disque (les badges de trophées) : envoyée en photo
+        with open(file_id, "rb") as f:
+            await bot.send_photo(chat_id, f, caption=legende or None)
+        return
     await getattr(bot, ENVOI_MEDIA.get(type_, "send_document"))(chat_id, file_id, caption=legende or None)
 
 

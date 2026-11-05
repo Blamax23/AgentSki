@@ -56,16 +56,16 @@ AIDE = """Voilà ce que je sais faire :
 /capsule : remplir ta capsule temporelle
 
 😄 Surprises
-/easter : ajouter une archive (en privé)
-/chambre [prénom] : une archive tout de suite
-/ajout : alimenter les réserves (en privé)
-/preaud : le classement des Preaud
-/icham [phrase] : traduite en arabe
-/adrille_rallye : une pub
+/easter : chut… (en privé)
+/chambre [prénom] : une surprise, à tes risques
+/ajout : nourrir la bête (en privé)
+/preaud : un classement très officiel
+/icham [phrase] : à essayer pour voir
+/adrille_rallye : tu verras bien
 
 🤖 Krok
 /talk [message] : discuter (ou écris-moi directement)
-/achille : Krok parle comme Achille
+/achille : un mode… particulier
 /oublie : effacer ce que Krok sait de toi (en privé)
 
 📎 Sans commande

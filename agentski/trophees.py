@@ -7,6 +7,7 @@ Doublure (aucun lien entre une descente filmée et un moment ou une personne à 
 Noctambule (les messages du groupe ne sont pas gardés), Collectionneur, Imitateur, Incompris, Quiz master et Oreille absolue
 (aucun score de partie n'est gardé)."""
 from datetime import date, datetime, time, timedelta
+from pathlib import Path
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ from .models import (Activite, Archive, ChampJournal, Chute, Citation, Defi, Def
 from .surprises import Evenement
 
 MEDAILLES = {1: "🥉", 2: "🥈", 3: "🥇"}
+IMAGES = config.ROOT / "donnees" / "trophees"  # les badges dessinés par scripts/generer_badges.py, un JPEG par trophée et par palier
 ANNONCES_PAR_PASSAGE = 3
 
 
@@ -404,11 +406,41 @@ def _texte(session: Session, t: Trophee) -> str:
     return f"🏆 {personne.prenom} débloque « {nom} »" + (f" {MEDAILLES[t.niveau]}" if seuils else "") + f" : {detail}"
 
 
+def image(code: str, niveau: int) -> Path | None:
+    chemin = IMAGES / f"{code}_{max(niveau, 1)}.jpg"
+    return chemin if chemin.exists() else None
+
+
+def vitrine_image(session: Session, p: Personne) -> bytes | None:
+    """La vitrine en une image : les badges débloqués en couleur (au plus haut palier), les autres en écus verrouillés. None si Pillow ou les badges manquent."""
+    try:
+        from io import BytesIO
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        return None
+    verrou = IMAGES / "verrou.jpg"
+    if not verrou.exists():
+        return None
+    haut = dict(session.execute(select(Trophee.code, func.max(Trophee.niveau)).where(Trophee.personne_id == p.id).group_by(Trophee.code)).all())
+    codes = [c[0] for c in CATALOGUE] + ["vitrine_pleine"]
+    colonnes, cote, marge, entete = 6, 150, 14, 96
+    lignes = -(-len(codes) // colonnes)
+    largeur, hauteur = colonnes * (cote + marge) + marge, entete + lignes * (cote + marge) + marge
+    toile = Image.new("RGB", (largeur, hauteur), (13, 23, 34))
+    d = ImageDraw.Draw(toile)
+    d.text((marge * 2, 22), f"Vitrine de {p.prenom}", font=ImageFont.load_default(size=34), fill=(250, 252, 255))
+    d.text((marge * 2, 64), f"{len(haut)} / {len(codes)}"  # sans accent : la police intégrée de Pillow n'en a pas, et le VPS n'a pas de police à lui, font=ImageFont.load_default(size=20), fill=(217, 164, 65))
+    for i, code in enumerate(codes):
+        chemin = image(code, haut[code]) if code in haut else None
+        vignette = Image.open(chemin or verrou).resize((cote, cote), Image.LANCZOS)
+        toile.paste(vignette, (marge + (i % colonnes) * (cote + marge), entete + (i // colonnes) * (cote + marge)))
+    sortie = BytesIO()
+    toile.save(sortie, "JPEG", quality=88)
+    return sortie.getvalue()
+
+
 def evenements(session: Session) -> list[Evenement]:
     """Toutes les cinq minutes : calcule, puis annonce au groupe trois trophées au plus par passage (pas de déluge au premier calcul)."""
-    aujourd = aujourdhui()
-    if session.scalar(select(Journee.id).where(Journee.ski.is_(True), Journee.jour >= aujourd - timedelta(days=1), Journee.jour <= aujourd).limit(1)) is None:
-        return []  # ni calcul ni annonce hors d'un jour de ski (ou du lendemain) : la préparation, les archives et les tests ne débloquent rien
     derniere = reglage(session, "trophees_dernier")
     if derniere and maintenant() - datetime.fromisoformat(derniere) < timedelta(minutes=5):
         return []
@@ -421,7 +453,7 @@ def evenements(session: Session) -> list[Evenement]:
     if destinataire is None:
         return []
     a_annoncer = list(session.scalars(select(Trophee).where(Trophee.annonce.is_(False)).order_by(Trophee.id).limit(ANNONCES_PAR_PASSAGE)))
-    sortie = [Evenement(destinataire, _texte(session, t)) for t in a_annoncer]
+    sortie = [Evenement(destinataire, _texte(session, t), (("fichier", str(image(t.code, t.niveau))) if image(t.code, t.niveau) else None)) for t in a_annoncer]
     for t in a_annoncer:
         t.annonce = True
     session.commit()

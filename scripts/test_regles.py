@@ -87,8 +87,8 @@ async def scenarios():
     a(2026, 12, 16, 10, 0)  # un mercredi sans week-end
     ok, up = await essayer("/moment bonjour")
     verifie(not ok and "week-end de ski" in up.message.reply_text.call_args[0][0], "garde-fou : /moment refusé en semaine, avec explication")
-    verifie(not (await essayer("/chute"))[0] and not (await essayer("/ou"))[0] and not (await essayer("/play titre"))[0], "garde-fou : chute, ou et play aussi")
-    verifie((await essayer("/citation Adrien bonjour"))[0] and (await essayer("/son Daft Punk"))[0] and (await essayer("/stats"))[0], "garde-fou : citation, son et stats restent permis en semaine")
+    verifie(not (await essayer("/chute"))[0] and not (await essayer("/ou"))[0] and not (await essayer("/citation Adrien bonjour"))[0], "garde-fou : chute, ou et citation (matière du vlog) aussi")
+    verifie((await essayer("/play titre"))[0] and (await essayer("/son Daft Punk"))[0] and (await essayer("/stats"))[0], "garde-fou : la musique et les stats restent permises en semaine")
     verifie(not (await essayer("/groupe", uid=2, chat="group"))[0] and (await essayer("/groupe", uid=1, chat="group"))[0], "garde-fou : /groupe réservé à l'organisateur")
     verifie((await essayer("/inconnue"))[0] and (await essayer("bonjour"))[0], "garde-fou : une commande sans règle et un texte ordinaire ne sont jamais arrêtés")
     ok, up = await essayer("/Moment@krok_bot salut")

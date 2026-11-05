@@ -33,8 +33,9 @@ REGLES: dict[str, Regle] = {
     "anniversaire": PRIVE, "oublie": PRIVE,
     # Ce qui se joue à plusieurs : dans le groupe seulement
     "duel": GROUPE, "quicestce": GROUPE, "adrille_rallye": GROUPE, "adrille": GROUPE,
-    # Ce qui n'a de sens que pendant un week-end de ski déclaré
-    "moment": SKI, "chute": SKI, "chrono": SKI, "ou": SKI, "rdv": SKI, "gopro": SKI, "play": SKI, "file": SKI, "pause": SKI,
+    # Ce qui concerne le ski lui-même ou la récolte de matière pour le vlog : seulement pendant un week-end de ski déclaré.
+    # Le reste (musique, trophées, jeux, discussion, stats...) marche tout le temps.
+    "moment": SKI, "chute": SKI, "chrono": SKI, "ou": SKI, "rdv": SKI, "gopro": SKI, "citation": SKI,
     # Ce qui engage l'organisateur seul
     "groupe": Regle(qui="organisateur"), "medias": Regle(lieu="prive", qui="organisateur"), "confessionnal": Regle(lieu="prive", quand="ski", qui="organisateur"), "revelation": Regle(qui="organisateur"),
 }

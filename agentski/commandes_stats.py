@@ -92,7 +92,11 @@ async def fichier_activite(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 async def commande_trophees(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     with SessionLocal() as session:
-        await update.message.reply_text(trophees.vitrine(session, _moi(session, update)))
+        personne = _moi(session, update)
+        prenom, texte, image = personne.prenom, trophees.vitrine(session, personne), trophees.vitrine_image(session, personne)
+    if image:
+        await update.message.reply_photo(image, caption=f"🏆 La vitrine de {prenom}")
+    await update.message.reply_text(texte)
 
 
 def installer(app) -> None:
