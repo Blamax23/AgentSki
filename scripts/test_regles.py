@@ -105,5 +105,5 @@ for fichier in (RACINE / "agentski").glob("*.py"):
     texte = fichier.read_text(encoding="utf-8")
     noms |= set(re.findall(r'CommandHandler\("([a-z_]+)"', texte)) | set(re.findall(r'\("([a-z_]+)", (?:commande|bouton)_', texte))
 inconnues = [c for c in regles.REGLES if c not in noms]
-verifie(not inconnues or set(inconnues) <= {"adrille_rallye", "adrille", "duel", "quicestce", "oublie", "talk"}, f"table : chaque commande de la table existe (à venir : {sorted(set(inconnues))})")
+verifie(not inconnues or set(inconnues) <= {"oublie", "talk"}, f"table : chaque commande de la table existe (à venir : {sorted(set(inconnues))})")
 print("\nTout passe.")

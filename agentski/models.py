@@ -403,3 +403,23 @@ class Trophee(Base):
     niveau: Mapped[int] = mapped_column(Integer)  # 1 bronze, 2 argent, 3 or ; 1 pour un trophée sans niveaux
     debloque_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     annonce: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+
+
+class Devinette(Base):
+    """Une question « Qui est-ce ? » : une citation sans son auteur, que le groupe doit attribuer."""
+    __tablename__ = "devinette"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    citation_id: Mapped[int] = mapped_column(ForeignKey("citation.id"))
+    clos: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class DevinetteReponse(Base):
+    __tablename__ = "devinette_reponse"
+    __table_args__ = (UniqueConstraint("devinette_id", "personne_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    devinette_id: Mapped[int] = mapped_column(ForeignKey("devinette.id"))
+    personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    choix_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
