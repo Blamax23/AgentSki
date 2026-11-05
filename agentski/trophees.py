@@ -429,7 +429,8 @@ def vitrine_image(session: Session, p: Personne) -> bytes | None:
     toile = Image.new("RGB", (largeur, hauteur), (13, 23, 34))
     d = ImageDraw.Draw(toile)
     d.text((marge * 2, 22), f"Vitrine de {p.prenom}", font=ImageFont.load_default(size=34), fill=(250, 252, 255))
-    d.text((marge * 2, 64), f"{len(haut)} / {len(codes)}"  # sans accent : la police intégrée de Pillow n'en a pas, et le VPS n'a pas de police à lui, font=ImageFont.load_default(size=20), fill=(217, 164, 65))
+    # Pas d'accent dans ce texte : la police intégrée de Pillow n'en a pas, et le VPS n'a pas de police à lui.
+    d.text((marge * 2, 64), f"{len(haut)} / {len(codes)}", font=ImageFont.load_default(size=20), fill=(217, 164, 65))
     for i, code in enumerate(codes):
         chemin = image(code, haut[code]) if code in haut else None
         vignette = Image.open(chemin or verrou).resize((cote, cote), Image.LANCZOS)
