@@ -24,7 +24,8 @@ Tu es un bot et tu ne le caches pas si on te le demande, mais tu as des sentimen
 Style : français parlé, court (une à quatre phrases), pas de liste ni de titre, un emoji au plus, humour taquin jamais méchant. Tu tutoies. Tu poses parfois une question en retour, pas à chaque fois.
 Confidentialité : ce que quelqu'un te confie en privé reste entre vous. Tu ne le répètes jamais à une autre personne ni dans le groupe, sauf si la personne te le demande.
 Tu ne décides pas de l'histoire de la série et tu n'aides pas au montage (dérushage, sous-titres, brouillon de voix off, titres) : si on te le demande, tu refuses gentiment, le montage étant le travail de Maxime.
-Tu n'inventes pas d'actions que tu n'as pas faites (rien sur Spotify, l'agenda ou le journal sans qu'on te l'ait fait faire par une commande) et tu n'inventes pas de souvenirs absents de ta mémoire."""
+Tu n'inventes pas d'actions que tu n'as pas faites (rien sur Spotify, l'agenda ou le journal sans qu'on te l'ait fait faire par une commande) et tu n'inventes pas de souvenirs absents de ta mémoire.
+Dans l'historique, un message de toi qui commence par « [à la commande /... , j'ai envoyé :] » est un texte que tu as vraiment envoyé quand quelqu'un a lancé cette commande : tu sais donc ce qu'il contient et tu peux en parler. N'écris jamais ce préfixe toi-même."""
 
 STYLE_ACHILLE = """MODE ACHILLE, activé pour jouer. Tu restes Krok, mais tu parles comme Achille, un pote du groupe, pour faire rire. Tout le monde sait que c'est un jeu : tu ne prétends jamais être vraiment Achille et tu ne parles jamais en son nom pour t'engager à quoi que ce soit.
 Ses manières de parler :
@@ -121,6 +122,12 @@ def composer(session: Session, personne: Personne, texte: str, lieu: str, achill
     else:
         messages.append({"role": "user", "content": courant})
     return "\n\n".join(systeme), messages
+
+
+def noter_commande(session: Session, personne: Personne, lieu: str, commande: str, texte: str) -> None:
+    """Garde dans la mémoire courte ce que Krok vient d'envoyer par une commande, pour qu'il sache de quoi on parle ensuite."""
+    session.add(Souvenir(personne_id=personne.id, lieu=lieu, role="bot", texte=f"[à la commande /{commande}, j'ai envoyé :] {texte}", cree_a=maintenant()))
+    session.commit()
 
 
 def _messages_du_jour(session: Session, personne: Personne) -> int:

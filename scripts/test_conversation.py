@@ -83,6 +83,11 @@ with SessionLocal() as s:
         rep = conversation.repondre(s, adrien, f"coucou {i}", "prive", False, generateur, resumeur_casse)
     verifie(rep == "Salut, ça va ?", "résumé illisible : la conversation continue sans erreur")
 
+    # --- ce qu'une commande a envoyé est dans la mémoire courte ---
+    conversation.noter_commande(s, maxime, "groupe", "adrille_rallye", "Adrille Rallye : https://exemple.test")
+    _, msgs = conversation.composer(s, maxime, "c'est quoi ce site ?", "groupe", False)
+    verifie(any("/adrille_rallye" in m["content"] and "https://exemple.test" in m["content"] for m in msgs if m["role"] == "assistant"),
+            "commande : ce que Krok a envoyé figure dans l'historique qu'il reçoit")
     # --- mode Achille ---
     verifie(not conversation.mode_achille(s, 42), "Achille : désactivé par défaut")
     verifie(conversation.basculer_achille(s, 42) and conversation.mode_achille(s, 42), "Achille : /achille l'active")

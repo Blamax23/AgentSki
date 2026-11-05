@@ -112,7 +112,7 @@ async def telegram():
     ia.economique = lambda *a, **k: "ترجمة"
     ia.creatif = lambda *a, **k: "Un duel de pierre-feuille-ciseaux."
     def maj(args=()):
-        return SimpleNamespace(message=SimpleNamespace(reply_text=AsyncMock()), effective_user=SimpleNamespace(id=1)), SimpleNamespace(args=list(args))
+        return SimpleNamespace(message=SimpleNamespace(reply_text=AsyncMock()), effective_user=SimpleNamespace(id=1), effective_chat=SimpleNamespace(type="supergroup")), SimpleNamespace(args=list(args))
     up, ctx = maj()
     await commandes_blagues.commande_preaud(up, ctx)
     verifie(up.message.reply_text.call_args[0][0].startswith("Moi, Krok le bot"), "/preaud depuis Telegram")
