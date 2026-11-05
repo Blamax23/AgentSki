@@ -183,6 +183,11 @@ with SessionLocal() as s:
     trophees.calculer = lambda session: 0
     horloge.regler(horloge.vers_utc(datetime(2027, 3, 1, 12, 0)))
     amis.definir_reglage(s, "groupe_id", "-100")
+    from agentski.models import Journee as _J, Weekend as _W
+    amis.definir_reglage(s, "trophees_dernier", "2000-01-01T00:00:00")
+    verifie(trophees.evenements(s) == [], "annonces : rien hors d'un jour de ski, même avec des trophées en attente")
+    _w = _W(date_debut=datetime(2027, 3, 1).date(), date_fin=datetime(2027, 3, 1).date(), statut="confirme"); s.add(_w); s.flush()
+    s.add(_J(weekend_id=_w.id, jour=datetime(2027, 3, 1).date(), ski=True)); s.commit()
     ad_ = s.scalar(select(Personne).where(Personne.prenom == "Adrien"))
     s.add_all([Trophee(personne_id=ad_.id, code="pingouin", niveau=2), Trophee(personne_id=ad_.id, code="fidele", niveau=1),
                Trophee(personne_id=ad_.id, code="melomane", niveau=1), Trophee(personne_id=ad_.id, code="poete", niveau=2),

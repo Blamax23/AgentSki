@@ -12,7 +12,7 @@ from telegram.ext import (Application, ApplicationHandlerStop, CallbackQueryHand
 
 from sqlalchemy import select
 
-from . import acces, amis, audio, commandes, commandes_blagues, commandes_confessionnal, commandes_conversation, commandes_position, commandes_stats, config, entretien, fun, ia, integrations, jeux, journal, previsions, rappels, regles, simulation
+from . import acces, amis, audio, commandes, commandes_blagues, commandes_confessionnal, commandes_conversation, commandes_position, commandes_stats, config, entretien, fun, ia, integrations, jeux, journal, medias, previsions, rappels, regles, simulation
 from .db import SessionLocal, seed_personnes, sync_allowed_users
 from .models import Personne
 
@@ -158,8 +158,11 @@ async def vocal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         e = entretien.entretien_ouvert(session, personne.id)
         entretien_id = e.id if e else None
     if entretien_id is None:
-        await update.message.reply_text("Je n'ai pas d'entretien en cours avec toi. "
-                                        "Le bouton « Commencer l'entretien » arrive avec le rappel du soir.")
+        if update.effective_chat.type != "private":
+            return  # dans le groupe, les vocaux restent entre amis
+        with SessionLocal() as session:  # hors entretien, le vocal est gardé : c'est de l'audio pour la série
+            reponse = medias.ranger_vocal(session, acces.personne_connue(session, update.effective_user.id), media.file_id, media.file_size)
+        await update.message.reply_text(reponse)
         return
     if media.file_size and media.file_size > 20 * 1024 * 1024:
         await update.message.reply_text("Trop lourd, envoie une version plus courte.")
@@ -250,7 +253,7 @@ MENU = [("moment", "Poser un marqueur dans la journée"), ("chute", "Noter une c
         ("course", "La liste de courses"), ("son", "Ajouter un morceau à la playlist"), ("play", "Lancer un morceau sur l'appareil Spotify actif"), ("file", "Ajouter un morceau à la file d'attente"), ("pause", "Mettre la musique en pause"), ("ics", "Les sorties dans ton agenda"),
         ("capsule", "Remplir ta capsule temporelle"), ("stats", "Tes statistiques (ou « tous »)"), ("chrono", "Noter un chrono sur une piste"),
         ("fils", "Paris et défis en cours"), ("talk", "Discuter avec Krok"), ("oublie", "Effacer ce que Krok sait de toi"), ("achille", "Krok parle comme Achille"), ("duel", "Un duel entre deux personnes"), ("quicestce", "Qui a dit cette phrase ?"), ("icham", "Traduire une phrase en arabe"), ("preaud", "Le classement des Preaud"), ("adrille_rallye", "Une pub pour Adrille Rallye"), ("trophees", "Tes trophées débloqués"), ("position", "Partager ta position en direct"), ("ou", "Où est quelqu'un"), ("rdv", "Un point de rendez-vous"), ("afaire", "Pistes pas encore faites"), ("gopro", "À qui le tour de filmer"),
-        ("confessionnal", "Le plan du confessionnal"), ("kit", "Exporter ce qui a été vécu"), ("vues", "Chiffres des épisodes"), ("aide", "Ce que je sais faire")]
+        ("confessionnal", "Le plan du confessionnal"), ("medias", "Renvoyer les médias gardés"), ("kit", "Exporter ce qui a été vécu"), ("vues", "Chiffres des épisodes"), ("aide", "Ce que je sais faire")]
 # Cachées, volontairement absentes du menu : /verte, /raclette et 🧀, /groupe, /revelation, /resolu, /resultat, /verdict, /imitation, /retirer
 
 

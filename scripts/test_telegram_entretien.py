@@ -69,10 +69,10 @@ async def telecharger(chemin):
     shutil.copy(VOCAL, chemin)
 
 
-def vocal_update(taille=50_000):
-    media = SimpleNamespace(file_size=taille, duration=15, get_file=AsyncMock(return_value=SimpleNamespace(download_to_drive=telecharger)))
+def vocal_update(taille=50_000, type_chat="private"):
+    media = SimpleNamespace(file_id="VOC", file_size=taille, duration=15, get_file=AsyncMock(return_value=SimpleNamespace(download_to_drive=telecharger)))
     message = SimpleNamespace(voice=media, audio=None, reply_text=AsyncMock(), text=None, reply_to_message=None)
-    return SimpleNamespace(message=message, effective_user=SimpleNamespace(id=1), effective_chat=SimpleNamespace(id=99)), message
+    return SimpleNamespace(message=message, effective_user=SimpleNamespace(id=1), effective_chat=SimpleNamespace(id=99, type=type_chat)), message
 
 
 def contexte():
@@ -82,7 +82,10 @@ def contexte():
 async def main():
     up, msg = vocal_update()
     await bot.vocal(up, contexte())
-    verifie("pas d'entretien en cours" in msg.reply_text.call_args[0][0], "vocal hors entretien : réponse claire, rien n'est traité")
+    verifie("Gardé" in msg.reply_text.call_args[0][0] or "gardé" in msg.reply_text.call_args[0][0], "vocal hors entretien, en privé : gardé pour la série, rien n'est transcrit")
+    up, msg = vocal_update(type_chat="supergroup")
+    await bot.vocal(up, contexte())
+    verifie(not msg.reply_text.called, "vocal dans le groupe, hors entretien : le bot se tait")
 
     with SessionLocal() as s:
         entretien.demarrer(s, JID, MID)

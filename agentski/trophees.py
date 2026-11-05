@@ -406,6 +406,9 @@ def _texte(session: Session, t: Trophee) -> str:
 
 def evenements(session: Session) -> list[Evenement]:
     """Toutes les cinq minutes : calcule, puis annonce au groupe trois trophées au plus par passage (pas de déluge au premier calcul)."""
+    aujourd = aujourdhui()
+    if session.scalar(select(Journee.id).where(Journee.ski.is_(True), Journee.jour >= aujourd - timedelta(days=1), Journee.jour <= aujourd).limit(1)) is None:
+        return []  # ni calcul ni annonce hors d'un jour de ski (ou du lendemain) : la préparation, les archives et les tests ne débloquent rien
     derniere = reglage(session, "trophees_dernier")
     if derniere and maintenant() - datetime.fromisoformat(derniere) < timedelta(minutes=5):
         return []

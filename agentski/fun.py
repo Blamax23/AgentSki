@@ -11,7 +11,7 @@ from .db import SessionLocal
 from .models import Personne
 
 log = logging.getLogger("agentski")
-ENVOI_MEDIA = {"photo": "send_photo", "video": "send_video", "animation": "send_animation", "document": "send_document"}
+ENVOI_MEDIA = {"photo": "send_photo", "video": "send_video", "animation": "send_animation", "document": "send_document", "voice": "send_voice"}
 
 
 def _personne(session, update: Update):
@@ -128,11 +128,11 @@ async def commande_anniversaire(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 def _evenements() -> list[surprises.Evenement]:
-    from . import agenda, bonnenuit, briefing, confessionnal, positions, trophees
+    from . import agenda, bonnenuit, briefing, compte_a_rebours, confessionnal, positions, trophees
     with SessionLocal() as session:
         positions.maintenance(session)  # déduit les pistes du soir et efface les positions du week-end terminé
         return (surprises.evenements(session, ia.creatif) + briefing.evenements_meteo(session, ia.creatif)
-                + agenda.question_alix(session) + trophees.evenements(session) + bonnenuit.evenements(session, ia.creatif) + confessionnal.evenements(session))
+                + agenda.question_alix(session) + trophees.evenements(session) + bonnenuit.evenements(session, ia.creatif) + confessionnal.evenements(session) + compte_a_rebours.evenements(session))
 
 
 async def envoyer_evenements(context: ContextTypes.DEFAULT_TYPE) -> None:

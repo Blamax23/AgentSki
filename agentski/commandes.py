@@ -50,6 +50,7 @@ AIDE = """Voilà ce que je sais faire :
 /stats [prénom|tous] : tes statistiques
 /journal : relire un week-end
 /kit : exporter ce qui a été vécu
+/medias [hier|date|tout] : renvoyer les photos, vidéos et vocaux gardés (organisateur)
 /episode lien titre : enregistrer un épisode
 /vues : les chiffres YouTube
 /capsule : remplir ta capsule temporelle
@@ -69,6 +70,7 @@ AIDE = """Voilà ce que je sais faire :
 
 📎 Sans commande
 Envoie-moi tes photos et vidéos de moins de 20 Mo : je les range par journée.
+Envoie-moi des vocaux quand l'envie te prend : je les garde pour la série.
 Envoie-moi un fichier .fit ou .gpx de ta montre : j'en tire tes descentes.
 Le soir, je te demande ta note sur 10 et une phrase."""
 
@@ -175,6 +177,39 @@ async def media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await m.reply_text(reponse)
 
 
+async def commande_medias(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Renvoie les médias gardés (n'importe quelle taille) dans la conversation, pour les télécharger depuis Telegram."""
+    import asyncio
+    from datetime import date as _date, timedelta
+    from . import fun, medias
+    jour, tout, page = None, False, 1
+    for a in context.args:
+        if a.lower() == "tout":
+            tout = True
+        elif a.lower() in ("hier", "aujourd'hui", "aujourdhui"):
+            jour = amis.aujourdhui() - timedelta(days=1 if a.lower() == "hier" else 0)
+        elif a.isdigit() and len(a) <= 3:
+            page = max(1, int(a))
+        else:
+            try:
+                jour = _date.fromisoformat(a)
+            except ValueError:
+                await update.message.reply_text("Format : /medias, /medias hier, /medias 2027-01-02, /medias tout, et un numéro de page à la fin.")
+                return
+    with SessionLocal() as session:
+        liste, total, choisi = medias.a_envoyer(session, jour, tout, page)
+    if not liste:
+        await update.message.reply_text("Aucun média pour ça." if total == 0 else f"Il n'y a pas de page {page} : {total} médias en tout.")
+        return
+    pages = -(-total // medias.PAR_PAGE)
+    await update.message.reply_text(f"📥 {total} média{'s' if total > 1 else ''}" + (f" du {choisi:%d/%m/%Y}" if choisi else "") + f", page {page}/{pages}. Je les envoie.")
+    for type_, file_id, legende in liste:
+        await fun.envoyer_media(context.bot, update.effective_chat.id, type_, file_id, legende)
+        await asyncio.sleep(0.4)
+    if page < pages:
+        await update.message.reply_text(f"Il en reste : relance avec le numéro de page {page + 1} à la fin de la commande.")
+
+
 async def bouton_note(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     _, journee_id, valeur = query.data.split("|")
@@ -222,6 +257,7 @@ def installer(app) -> None:
     app.add_handler(CommandHandler("chute", commande_chute))
     app.add_handler(CommandHandler("citation", commande_citation))
     app.add_handler(CommandHandler("capsule", commande_capsule))
+    app.add_handler(CommandHandler("medias", commande_medias))
     app.add_handler(CommandHandler("revelation", commande_revelation))
     app.add_handler(CallbackQueryHandler(bouton_note, pattern=r"^n\|"))
     app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.ANIMATION | filters.Document.IMAGE

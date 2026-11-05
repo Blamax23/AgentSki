@@ -74,10 +74,10 @@ with SessionLocal() as s:
     verifie("Adrien" in rep, "/citation sans prénom : celle de l'auteur")
     verifie("Format" in amis.ajouter_citation(s, adr, []), "/citation vide : le format est rappelé")
 
-    verifie("Trop lourd" in amis.ranger_media(s, adr, "video", "F1", 25 * 1024 * 1024, None), "média de plus de 20 Mo refusé")
+    verifie("/medias" in amis.ranger_media(s, adr, "video", "F1", 25 * 1024 * 1024, None), "média de plus de 20 Mo gardé, avec la façon de le récupérer")
     verifie("Rangé dans la journée du Samedi 12 décembre" in amis.ranger_media(s, adr, "photo", "F2", 80_000, "vue"), "photo rangée dans la journée")
     verifie(s.scalar(select(Media).where(Media.file_id == "F2")).legende == "vue", "seule la référence et la légende sont gardées")
-    verifie(s.scalar(select(Media.id).where(Media.file_id == "F1")) is None, "le fichier trop lourd n'est pas rangé")
+    verifie(s.scalar(select(Media.id).where(Media.file_id == "F1")) is not None, "le fichier de plus de 20 Mo est bien rangé aussi")
     a((14, 30), 20)  # un autre jour, sans journée de ski
     verifie("hors sortie" in amis.ranger_media(s, adr, "photo", "F3", 1000, None), "sans journée de ski : gardé hors sortie")
     verifie(s.scalar(select(Media).where(Media.file_id == "F3")).journee_id is None, "…sans journée rattachée")

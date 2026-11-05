@@ -118,15 +118,14 @@ def ajouter_citation(session: Session, auteur: Personne, args: list[str]) -> str
 
 def ranger_media(session: Session, auteur: Personne, type_: str, file_id: str, taille: int | None, legende: str | None) -> str:
     """Range la référence d'une photo ou d'une vidéo dans la journée d'aujourd'hui, si elle existe."""
-    if taille and taille > TAILLE_MAX_MEDIA:
-        return "Trop lourd (plus de 20 Mo), envoie une version plus courte."
     journee = session.scalar(select(Journee).where(Journee.jour == aujourdhui()))
     session.add(Media(personne_id=auteur.id, journee_id=journee.id if journee else None, type=type_, file_id=file_id,
                       taille=taille, legende=legende or None, cree_a=_maintenant_aware()))
     session.commit()
+    gros = " Plus de 20 Mo : le bot ne peut pas le télécharger lui-même, mais /medias te le renverra en taille réelle." if taille and taille > TAILLE_MAX_MEDIA else ""
     if journee is None:
-        return "📎 Reçu et gardé (hors sortie : aucune journée de ski aujourd'hui)."
-    return f"📎 Rangé dans la journée du {_jour_lisible(journee.jour)}."
+        return "📎 Reçu et gardé (hors sortie : aucune journée de ski aujourd'hui)." + gros
+    return f"📎 Rangé dans la journée du {_jour_lisible(journee.jour)}." + gros
 
 
 # --- Note du soir ----------------------------------------------------------------------
