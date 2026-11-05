@@ -377,3 +377,16 @@ class Activite(Base):
     derniere_descente: Mapped[datetime | None] = mapped_column(DateTime)
     segments: Mapped[str] = mapped_column(Text, default="[]")  # JSON : début, milieu et fin de chaque descente (3 points), pas la trace
     cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Position(Base):
+    """Position reçue pendant un partage en direct. Effacée après le week-end : elle ne sert qu'à répondre à « où ? »."""
+    __tablename__ = "position"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    journee_id: Mapped[int | None] = mapped_column(ForeignKey("journee.id"))
+    lat: Mapped[float]
+    lon: Mapped[float]
+    precision_m: Mapped[float | None]
+    recue_a: Mapped[datetime] = mapped_column(DateTime)  # UTC naïf

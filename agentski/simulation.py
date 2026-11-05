@@ -8,6 +8,7 @@
 /simule_entretien démarre l'entretien du soir maintenant (ce que fera le bouton du rappel de 19 h) ; crée la journée du jour si besoin
 /simule_notes     envoie tout de suite la demande de note sur 10 et de phrase (ce qui part à 20 h) aux présents du jour
 /simule_avalanche N  fixe un faux niveau de risque d'avalanche de 1 à 5 (le vrai bulletin n'est pas branché) ; sans N, l'efface
+/simule_position  « /simule_position Adrien 46.003 6.69 » : une position pour une personne, comme un partage en direct (impossible à simuler sans téléphone)
 /simule_vocal     « /simule_vocal Samedi à Flaine avec Adrien… » : un vocal dont tu fournis la transcription
 """
 from datetime import datetime, timedelta
@@ -157,6 +158,22 @@ async def commande_avalanche_simulee(update: Update, context: ContextTypes.DEFAU
         await update.message.reply_text(briefing.texte_avalanche(session))
 
 
+async def commande_position_simulee(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    from . import amis, positions
+    try:
+        prenom, lat, lon = context.args[0], float(context.args[1]), float(context.args[2])
+    except (IndexError, ValueError):
+        await update.message.reply_text("Format : /simule_position Adrien 46.003 6.69")
+        return
+    with SessionLocal() as session:
+        personne = amis.personne_par_prenom(session, prenom)
+        if personne is None:
+            await update.message.reply_text(f"Je ne connais pas « {prenom} ».")
+            return
+        positions.enregistrer_position(session, personne, lat, lon, 10.0)
+    await update.message.reply_text(f"Position simulée pour {personne.prenom}. Essaie /ou et /rdv.")
+
+
 async def commande_vocal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     from .bot import traiter_transcription
     texte = " ".join(context.args)
@@ -179,5 +196,6 @@ def installer(app) -> None:
     app.add_handler(CommandHandler("simule_entretien", reserve(commande_entretien)))
     app.add_handler(CommandHandler("simule_vocal", reserve(commande_vocal)))
     app.add_handler(CommandHandler("simule_notes", reserve(commande_notes)))
+    app.add_handler(CommandHandler("simule_position", reserve(commande_position_simulee)))
     app.add_handler(CommandHandler("simule_avalanche", reserve(commande_avalanche_simulee)))
     app.add_handler(CallbackQueryHandler(reserve(bouton_reset), pattern=r"^sim\|"))
