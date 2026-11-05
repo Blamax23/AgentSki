@@ -423,3 +423,27 @@ class DevinetteReponse(Base):
     devinette_id: Mapped[int] = mapped_column(ForeignKey("devinette.id"))
     personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
     choix_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+
+
+class Souvenir(Base):
+    """Un message échangé avec Krok, gardé tel quel. `lieu` sépare le privé du groupe : le privé n'alimente jamais le groupe."""
+    __tablename__ = "souvenir"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    lieu: Mapped[str] = mapped_column(String(6))  # prive | groupe
+    role: Mapped[str] = mapped_column(String(4))  # user | bot
+    texte: Mapped[str] = mapped_column(Text)
+    cree_a: Mapped[datetime] = mapped_column(DateTime)  # UTC naïf
+
+
+class Memoire(Base):
+    """Ce que Krok a retenu d'une personne, résumé par un modèle, séparément pour le privé et pour le groupe."""
+    __tablename__ = "memoire"
+    __table_args__ = (UniqueConstraint("personne_id", "lieu"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    lieu: Mapped[str] = mapped_column(String(6))
+    resume: Mapped[str] = mapped_column(Text, default="", server_default="")
+    depuis_resume: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # messages échangés depuis le dernier résumé

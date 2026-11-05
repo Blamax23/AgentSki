@@ -125,3 +125,15 @@ def recherche_web(demande: str, max_resultats: int = 3) -> tuple[str, list[str]]
         raise RuntimeError("réponse vide ou coupée")
     urls = list(dict.fromkeys(a["url_citation"]["url"] for a in (choix["message"].get("annotations") or []) if "url_citation" in a))
     return texte, urls
+
+
+def conversation(systeme: str, messages: list[dict], max_tokens: int = 900) -> str:
+    """Réponse de Krok dans une conversation à plusieurs tours. `messages` : [{"role": "user"|"assistant", "content": ...}]."""
+    r = _appeler("chat/completions", {
+        "model": config.MODELE_CREATIF, "temperature": 1.0, "max_tokens": max_tokens, "provider": {"zdr": True}, "reasoning": {"effort": "low"},
+        "messages": [{"role": "system", "content": systeme}, *messages]}, delai=90)
+    choix = r["choices"][0]
+    texte = (choix["message"].get("content") or "").strip()
+    if not texte or choix.get("finish_reason") == "length":
+        raise RuntimeError("réponse vide ou coupée")
+    return texte
