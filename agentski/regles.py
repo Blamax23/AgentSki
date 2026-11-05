@@ -36,7 +36,7 @@ REGLES: dict[str, Regle] = {
     # Ce qui n'a de sens que pendant un week-end de ski déclaré
     "moment": SKI, "chute": SKI, "chrono": SKI, "ou": SKI, "rdv": SKI, "gopro": SKI, "play": SKI, "file": SKI, "pause": SKI,
     # Ce qui engage l'organisateur seul
-    "groupe": Regle(qui="organisateur"), "revelation": Regle(qui="organisateur"),
+    "groupe": Regle(qui="organisateur"), "confessionnal": Regle(lieu="prive", quand="ski", qui="organisateur"), "revelation": Regle(qui="organisateur"),
 }
 
 

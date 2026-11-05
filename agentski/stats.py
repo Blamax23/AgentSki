@@ -14,7 +14,7 @@ from .amis import _maintenant_aware, aujourdhui, journee_du_jour, personne_par_p
 from .briefing import faits_recap
 from .horloge import vers_paris
 from .journal import journal_md
-from .models import (ChampJournal, Chrono, Chute, Citation, Defi, Descente, Idee, Journee, Moment, Morceau, Note, Pari, Personne,
+from .models import (ChampJournal, Chrono, Chute, Citation, Confessionnal, Defi, Descente, Idee, Journee, Moment, Morceau, Note, Pari, Personne,
                      Presence, Sequence, Weekend)
 from .rappels import NOMS_MOIS, _conseil_pov, _jour_lisible
 
@@ -207,6 +207,12 @@ def kit(session: Session, cible: date | None = None) -> tuple[str, str] | None:
         Sequence.journee_id.in_(ids)).group_by(Personne.prenom).order_by(func.count().desc())).all()])
     section("Marqueurs posés avec /moment", [f"- {vers_paris(m.cree_a.replace(tzinfo=None)):%a %d/%m %H:%M}" + (f" : {m.texte}" if m.texte else "")
                                              for m in session.scalars(select(Moment).where(Moment.journee_id.in_(ids)).order_by(Moment.cree_a))])
+    section("Confessionnaux (repères pour les rushes : heure du « fait »)", [
+        f"- {_jour_lisible(j)} {vers_paris(c.decide_a):%H:%M} · {a}" + (f" + {b}" if b else "") + f" : {c.question}"
+        for c, j, a, b in ((c, jr, session.get(Personne, c.personne_id).prenom, session.get(Personne, c.autre_id).prenom if c.autre_id else None)
+                           for c, jr in session.execute(select(Confessionnal, Journee.jour).join(Journee, Confessionnal.journee_id == Journee.id).where(
+                               Confessionnal.journee_id.in_(ids), Confessionnal.statut == "fait").order_by(Confessionnal.decide_a)).all())
+        if c.decide_a is not None])
     section("Défis", [f"- {defis.TYPES[t][0]}" for t in session.scalars(select(Defi.type).where(Defi.journee_id.in_(ids)).order_by(Defi.id))])
     section("Morceaux ajoutés", [f"- {titre} — {artistes} (par {prenom})" for titre, artistes, prenom in session.execute(select(
         Morceau.titre, Morceau.artistes, Personne.prenom).join(Personne, Morceau.personne_id == Personne.id).where(

@@ -447,3 +447,19 @@ class Memoire(Base):
     lieu: Mapped[str] = mapped_column(String(6))
     resume: Mapped[str] = mapped_column(Text, default="", server_default="")
     depuis_resume: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # messages échangés depuis le dernier résumé
+
+
+class Confessionnal(Base):
+    """Une ligne du plan de confessionnal d'une soirée : qui passe, avec quelle question. Le tournage se fait hors du bot,
+    il ne garde que le plan et ce que l'organisateur dit en avoir suivi (`statut`)."""
+    __tablename__ = "confessionnal"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    journee_id: Mapped[int] = mapped_column(ForeignKey("journee.id"))
+    ordre: Mapped[int] = mapped_column(Integer)
+    personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    autre_id: Mapped[int | None] = mapped_column(ForeignKey("personne.id"))  # le deuxième de la question, pour un duo
+    type: Mapped[str] = mapped_column(String(12))  # libre | prediction | verdict | duo | special
+    question: Mapped[str] = mapped_column(Text)
+    statut: Mapped[str] = mapped_column(String(8), default="propose", server_default="propose")  # propose | fait | passe
+    decide_a: Mapped[datetime | None] = mapped_column(DateTime)  # UTC naïf : l'heure du « fait », un repère pour les rushes

@@ -12,7 +12,7 @@ from telegram.ext import (Application, ApplicationHandlerStop, CallbackQueryHand
 
 from sqlalchemy import select
 
-from . import acces, amis, audio, commandes, commandes_blagues, commandes_conversation, commandes_position, commandes_stats, config, entretien, fun, ia, integrations, jeux, journal, previsions, rappels, regles, simulation
+from . import acces, amis, audio, commandes, commandes_blagues, commandes_confessionnal, commandes_conversation, commandes_position, commandes_stats, config, entretien, fun, ia, integrations, jeux, journal, previsions, rappels, regles, simulation
 from .db import SessionLocal, seed_personnes, sync_allowed_users
 from .models import Personne
 
@@ -250,7 +250,7 @@ MENU = [("moment", "Poser un marqueur dans la journée"), ("chute", "Noter une c
         ("course", "La liste de courses"), ("son", "Ajouter un morceau à la playlist"), ("play", "Lancer un morceau sur l'appareil Spotify actif"), ("file", "Ajouter un morceau à la file d'attente"), ("pause", "Mettre la musique en pause"), ("ics", "Les sorties dans ton agenda"),
         ("capsule", "Remplir ta capsule temporelle"), ("stats", "Tes statistiques (ou « tous »)"), ("chrono", "Noter un chrono sur une piste"),
         ("fils", "Paris et défis en cours"), ("talk", "Discuter avec Krok"), ("oublie", "Effacer ce que Krok sait de toi"), ("achille", "Krok parle comme Achille"), ("duel", "Un duel entre deux personnes"), ("quicestce", "Qui a dit cette phrase ?"), ("icham", "Traduire une phrase en arabe"), ("preaud", "Le classement des Preaud"), ("adrille_rallye", "Une pub pour Adrille Rallye"), ("trophees", "Tes trophées débloqués"), ("position", "Partager ta position en direct"), ("ou", "Où est quelqu'un"), ("rdv", "Un point de rendez-vous"), ("afaire", "Pistes pas encore faites"), ("gopro", "À qui le tour de filmer"),
-        ("kit", "Exporter ce qui a été vécu"), ("vues", "Chiffres des épisodes"), ("aide", "Ce que je sais faire")]
+        ("confessionnal", "Le plan du confessionnal"), ("kit", "Exporter ce qui a été vécu"), ("vues", "Chiffres des épisodes"), ("aide", "Ce que je sais faire")]
 # Cachées, volontairement absentes du menu : /verte, /raclette et 🧀, /groupe, /revelation, /resolu, /resultat, /verdict, /imitation, /retirer
 
 
@@ -279,6 +279,7 @@ def main() -> None:
     commandes_position.installer(app)
     commandes_blagues.installer(app)
     commandes_conversation.installer(app)
+    commandes_confessionnal.installer(app)
     simulation.installer(app)  # fausses commandes, à retirer au gel de l'étape 4
     app.add_handler(CallbackQueryHandler(bouton_jeudi, pattern=r"^j\|"))
     app.add_handler(CallbackQueryHandler(bouton_entretien, pattern=r"^e\|"))
