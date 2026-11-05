@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from . import defis
 from .models import Citation, Devinette, DevinetteReponse, Personne
 
-PREAUD = ("Moi, Krok le bot, voici mon classement des Preaud préférés : \n1. Roland\n2. Patrick\n3. Marion\n4. Alix\n5. Achille")
+PREAUD = ("Moi, Krok le bot, voici mon classement des Preaud préférés : \n1. Roland\n2. Patrick\n3. Marion\n4. La PS4 d'Achille\n5. Alix\n6. Hercule Preaud (le futur fils d'Achille)\n7. Préau de ma cour d'école\n8. Achille")
 
 SITE = "https://adrille-rallye.vercel.app"
 ACCROCHES = ["Une annonce d'intérêt général, sortez les casques.", "Pause pub, mais une pub avec du moteur dedans.",

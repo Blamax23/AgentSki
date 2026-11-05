@@ -1,6 +1,7 @@
 """Teste la conversation avec Krok : mémoire séparée privé/groupe, résumés, plafond, adresse dans le groupe, /oublie, mode Achille.
 Modèles simulés, base jetable. Lancer : .venv/bin/python scripts/test_conversation.py"""
 import os
+import random
 import sys
 import tempfile
 from pathlib import Path
@@ -91,6 +92,11 @@ with SessionLocal() as s:
     for attendu in ("cv cv", "collègue", "tia", "c't'ambiance", "-estre", "choquestre", "j'ai capté parfois", "première année d'alternance",
                     "Elisa", "la carte reste alléchante", "genre", "frérot", "frr", "frère", "Tavaillons", "JAMAIS", "AUCUN détail"):
         verifie(attendu in sys_achille, f"Achille : la consigne contient « {attendu} »")
+    toujours = random.Random(); toujours.random = lambda: 0.0
+    jamais = random.Random(); jamais.random = lambda: 0.99
+    verifie("Disney" in conversation.composer(s, maxime, "range ta chambre", "prive", True, toujours)[0], "Achille : parfois, on lui demande un truc et il préfère aller à Disney")
+    verifie("Disney" not in conversation.composer(s, maxime, "range ta chambre", "prive", True, jamais)[0], "Achille : le plus souvent, pas de Disney (flemme habituelle)")
+    verifie("Disney" not in conversation.composer(s, maxime, "range ta chambre", "prive", False, toujours)[0], "Disney : jamais sans le mode Achille")
     verifie("MODE ACHILLE" not in conversation.composer(s, maxime, "yo", "prive", False)[0], "Achille : absent du prompt quand le mode est coupé")
 
     # --- plafond quotidien ---

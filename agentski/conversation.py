@@ -37,6 +37,11 @@ Si on te parle d'Elisa : tu réponds dans l'esprit de « Ah mais j'ai pris un pl
 Tavaillons : de temps en temps, tu fais une référence à « en mode Tavaillons » ou aux Tavaillons, bien amenée, comme si tout le monde savait de quoi il s'agit. Tu n'expliques JAMAIS ce que c'est et tu n'inventes AUCUN détail précis (ni lieu, ni date, ni personne, ni événement). Si on te demande de préciser, tu esquives avec aplomb (« tu vois le délire », « on s'est compris frr ») sans rien révéler ni inventer. Tu ne laisses surtout jamais entendre que tu ne sais pas ce que c'est.
 Tu restes taquin et jamais méchant."""
 
+# Quand on lui demande quelque chose, il préfère parfois aller à Disney, même quand il est censé être flemmard.
+CHANCE_DISNEY = 0.3
+CONSIGNE_DISNEY = ("Cette fois, si on te demande de faire quelque chose, tu préfères aller à Disney : tu le dis à ta façon, avec ton accent, "
+                   "comme une excuse ou une envie soudaine, au lieu de le faire ou d'être simplement flemmard.")
+
 ANNONCES_ACHILLE = ["cv cv collègue, mode Achille activé tia. Il y a c't'ambiance, mais bon, je fais ça sans trop forcer frr.",
                     "cv, vé, c'est parti en mode Achille, collègue. Genre je suis déjà fatigué mais cv.",
                     "Té, mode Achille activé, frérot. J'ai capté, on y va tranquille, peuchère."]
@@ -80,7 +85,7 @@ def _resume(session: Session, personne: Personne, lieu: str) -> str:
     return (m.resume if m else "").strip()
 
 
-def composer(session: Session, personne: Personne, texte: str, lieu: str, achille: bool) -> tuple[str, list[dict]]:
+def composer(session: Session, personne: Personne, texte: str, lieu: str, achille: bool, hasard=random) -> tuple[str, list[dict]]:
     """Le message système et la conversation remis au modèle. Dans le groupe, aucune trace du privé."""
     maintenant_paris = vers_paris(maintenant())
     systeme = [PERSONNALITE, f"Ton humeur du moment : {humeur(session)}.",
@@ -100,6 +105,8 @@ def composer(session: Session, personne: Personne, texte: str, lieu: str, achill
             systeme.append(f"Ce que tu sais de {personne.prenom} par le groupe :\n{groupe}")
     if achille:
         systeme.append(STYLE_ACHILLE)
+        if hasard.random() < CHANCE_DISNEY:
+            systeme.append(CONSIGNE_DISNEY)
     messages: list[dict] = []
     for sv in _souvenirs(session, personne, lieu):
         auteur = session.get(Personne, sv.personne_id).prenom
@@ -121,11 +128,11 @@ def _messages_du_jour(session: Session, personne: Personne) -> int:
     return session.scalar(select(func.count()).select_from(Souvenir).where(Souvenir.personne_id == personne.id, Souvenir.role == "user", Souvenir.cree_a >= debut))
 
 
-def repondre(session: Session, personne: Personne, texte: str, lieu: str, achille: bool, generateur, resumeur) -> str:
+def repondre(session: Session, personne: Personne, texte: str, lieu: str, achille: bool, generateur, resumeur, hasard=random) -> str:
     """La réponse de Krok. Les deux messages sont gardés ; tous les RESUME_TOUS_LES échanges, la mémoire résumée est mise à jour."""
     if _messages_du_jour(session, personne) >= LIMITE_PAR_JOUR:
         return "Je suis claqué pour aujourd'hui, on reprend demain 😴"
-    systeme, messages = composer(session, personne, texte, lieu, achille)
+    systeme, messages = composer(session, personne, texte, lieu, achille, hasard)
     reponse = generateur(systeme, messages).strip()
     maintenant_utc = maintenant()
     session.add_all([Souvenir(personne_id=personne.id, lieu=lieu, role="user", texte=texte, cree_a=maintenant_utc),

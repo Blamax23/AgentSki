@@ -41,7 +41,7 @@ def verifie(condition, texte):
 # --- /preaud --------------------------------------------------------------------------------------------------
 lignes = blagues.PREAUD.split("\n")
 verifie(lignes[0] == "Moi, Krok le bot, voici mon classement des Preaud préférés : ", "/preaud : la première phrase demandée, mot pour mot")
-verifie(lignes[1:] == ["1. Roland", "2. Patrick", "3. Marion", "4. Alix", "5. Achille"], "/preaud : Roland, Patrick, Marion, Alix puis Achille, dans cet ordre")
+verifie(lignes[1:] == ["1. Roland", "2. Patrick", "3. Marion", "4. La PS4 d'Achille", "5. Alix", "6. Hercule Preaud (le futur fils d'Achille)", "7. Préau de ma cour d'école", "8. Achille"], "/preaud : la PS4 au-dessus d'Alix, puis Hercule et le préau entre Alix et Achille")
 
 # --- /adrille_rallye ----------------------------------------------------------------------------------------------
 pubs = {blagues.pub_adrille_rallye() for _ in range(60)}
