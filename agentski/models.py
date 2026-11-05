@@ -390,3 +390,16 @@ class Position(Base):
     lon: Mapped[float]
     precision_m: Mapped[float | None]
     recue_a: Mapped[datetime] = mapped_column(DateTime)  # UTC naïf
+
+
+class Trophee(Base):
+    """Un trophée (ou un niveau de trophée) débloqué par une personne, sans aucune saisie en plus."""
+    __tablename__ = "trophee"
+    __table_args__ = (UniqueConstraint("personne_id", "code", "niveau"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    code: Mapped[str] = mapped_column(String(30))
+    niveau: Mapped[int] = mapped_column(Integer)  # 1 bronze, 2 argent, 3 or ; 1 pour un trophée sans niveaux
+    debloque_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    annonce: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

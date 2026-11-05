@@ -87,7 +87,16 @@ def _chambrer(cible: str | None):
         return surprises.chambrer(session, cible, ia.creatif)
 
 
+def _compter_chambre(telegram_id: int) -> None:
+    """Compteur pour le trophée Chambreur."""
+    with SessionLocal() as session:
+        personne = acces.personne_connue(session, telegram_id)
+        cle = f"chambre_count:{personne.id}"
+        amis.definir_reglage(session, cle, str(int(amis.reglage(session, cle) or 0) + 1))
+
+
 async def commande_chambre(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    _compter_chambre(update.effective_user.id)
     resultat = await asyncio.to_thread(_chambrer, " ".join(context.args) or None)
     if isinstance(resultat, str):
         await update.message.reply_text(resultat)
@@ -119,11 +128,11 @@ async def commande_anniversaire(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 def _evenements() -> list[surprises.Evenement]:
-    from . import agenda, briefing, positions
+    from . import agenda, briefing, positions, trophees
     with SessionLocal() as session:
         positions.maintenance(session)  # déduit les pistes du soir et efface les positions du week-end terminé
         return (surprises.evenements(session, ia.creatif) + briefing.evenements_meteo(session, ia.creatif)
-                + agenda.question_alix(session))
+                + agenda.question_alix(session) + trophees.evenements(session))
 
 
 async def envoyer_evenements(context: ContextTypes.DEFAULT_TYPE) -> None:

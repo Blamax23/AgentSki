@@ -358,6 +358,8 @@ def resultat_pronostic(session: Session, oui: bool) -> str:
     for v in session.scalars(select(DefiVote).where(DefiVote.defi_id == defi.id)):
         (bons if (v.valeur == 1) == oui else rates).append(session.get(Personne, v.personne_id).prenom)
     defi.etat = "clos"
+    from .amis import definir_reglage
+    definir_reglage(session, f"pronostic_resultat:{defi.id}", "oui" if oui else "non")  # pour le trophée Madame Irma
     session.commit()
     return (f"🔮 Pronostic du jour : {question}\nRéponse : {'oui' if oui else 'non'}.\n"
             f"✅ Juste : {', '.join(bons) or 'personne'}\n❌ Raté : {', '.join(rates) or 'personne'}")

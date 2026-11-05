@@ -149,6 +149,8 @@ def ajouter_morceau(session: Session, auteur: Personne, texte: str, http=_http) 
         journee = journee_du_jour(session, auteur)
         weekend = session.get(Weekend, journee.weekend_id)
         if session.scalar(select(Morceau.id).where(Morceau.weekend_id == weekend.id, Morceau.track_id == piste["id"])):
+            cle = f"monotitre:{auteur.id}"  # compteur pour le trophée Mono-titre
+            definir_reglage(session, cle, str(int(reglage(session, cle) or 0) + 1))
             return f"🎵 « {piste['name']} » est déjà dans la playlist de ce week-end."
         playlist = playlist_du_weekend(session, weekend, http)
         _api("POST", f"/playlists/{playlist}/items", {"uris": [piste["uri"]]}, http)

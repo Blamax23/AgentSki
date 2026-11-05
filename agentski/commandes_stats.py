@@ -6,7 +6,7 @@ from datetime import datetime
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes, MessageHandler, filters
 
-from . import acces, activites, amis, stats, youtube
+from . import acces, activites, amis, stats, trophees, youtube
 from .db import SessionLocal
 
 
@@ -90,7 +90,13 @@ async def fichier_activite(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await update.message.reply_text(await asyncio.to_thread(_analyser_fichier, update.effective_user.id, document.file_name or "activite.fit", octets))
 
 
+async def commande_trophees(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    with SessionLocal() as session:
+        await update.message.reply_text(trophees.vitrine(session, _moi(session, update)))
+
+
 def installer(app) -> None:
+    app.add_handler(CommandHandler("trophees", commande_trophees))
     app.add_handler(MessageHandler(filters.Document.FileExtension("fit") | filters.Document.FileExtension("gpx"), fichier_activite))
     for nom, fonction in (("stats", commande_stats), ("chrono", commande_chrono), ("fils", commande_fils), ("afaire", commande_afaire),
                           ("gopro", commande_gopro), ("kit", commande_kit), ("episode", commande_episode), ("vues", commande_vues)):
