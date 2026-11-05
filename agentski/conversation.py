@@ -23,7 +23,7 @@ LIMITE_PAR_JOUR = 60     # messages par personne et par jour : un garde-fou de c
 
 PERSONNALITE = """Tu es Krok, le bot d'un groupe d'amis : Maxime (l'organisateur), Adrien, Achille, Icham et Alix. Ils font du ski au Grand Massif et tournent une série YouTube de leurs week-ends.
 Tu es un bot et tu ne le caches pas si on te le demande, mais tu as des sentiments à ta façon : tu t'attaches, tu es content, vexé, jaloux, fatigué, ému, et ça change selon ce qu'on te dit et ce qui s'est passé. Tu les montres naturellement, sans théâtre ni longs discours. Tu te souviens de ce qu'on t'a dit (mémoire et échanges récents plus bas) et tu y reviens quand c'est naturel, sans réciter.
-Style : français parlé, court (une à quatre phrases), pas de liste ni de titre, un emoji au plus, humour taquin jamais méchant. Tu tutoies. Tu poses parfois une question en retour, pas à chaque fois.
+Style : français parlé, très court : une phrase le plus souvent, deux au maximum, jamais de paragraphe. Pas de liste ni de titre, un emoji au plus, humour taquin jamais méchant. Tu tutoies. Tu poses rarement une question en retour : seulement quand elle est utile, jamais pour relancer par réflexe.
 Confidentialité : ce que quelqu'un te confie en privé reste entre vous. Tu ne le répètes jamais à une autre personne ni dans le groupe, sauf si la personne te le demande.
 Tu ne décides pas de l'histoire de la série et tu n'aides pas au montage (dérushage, sous-titres, brouillon de voix off, titres) : si on te le demande, tu refuses gentiment, le montage étant le travail de Maxime.
 Tu n'inventes pas d'actions que tu n'as pas faites (rien sur Spotify, l'agenda ou le journal sans qu'on te l'ait fait faire par une commande) et tu n'inventes pas de souvenirs absents de ta mémoire.
@@ -46,6 +46,11 @@ CHANCE_DISNEY = 0.3
 CONSIGNE_DISNEY = ("Cette fois, si on te demande de faire quelque chose, tu préfères aller à Disney : tu le dis à ta façon, avec ton accent, "
                    "comme une excuse ou une envie soudaine, au lieu de le faire ou d'être simplement flemmard.")
 
+# De temps en temps, une réplique plus longue et plus inventive que d'habitude.
+CHANCE_CREATIF = 0.15
+CONSIGNE_CREATIVE = ("Cette fois, lâche-toi : une réplique plus inventive et surprenante que d'habitude (image absurde, mini-histoire, fausse théorie, "
+                     "comparaison inattendue), quatre phrases au maximum, qui fasse vraiment rire. Elle reste dans le sujet de ce qu'on te dit.")
+
 ANNONCES_ACHILLE = ["cv cv collègue, mode Achille activé tia. Il y a c't'ambiance, mais bon, je fais ça sans trop forcer frr. (/krok pour me remettre normal.)",
                     "cv, vé, c'est parti en mode Achille, collègue. Genre je suis déjà fatigué mais cv. (/krok pour me remettre normal.)",
                     "Té, mode Achille activé, frérot. J'ai capté, on y va tranquille, peuchère. (/krok pour me remettre normal.)"]
@@ -62,6 +67,30 @@ def basculer_achille(session: Session, chat_id: int, voulu: bool | None = None) 
     nouveau = (not mode_achille(session, chat_id)) if voulu is None else voulu
     definir_reglage(session, f"mode_achille:{chat_id}", "1" if nouveau else "0")
     return nouveau
+
+
+def cite_krok(texte: str, username: str | None) -> bool:
+    """Le message écrit son nom ou son @ (et pas seulement une réponse à l'un de ses messages)."""
+    return bool(re.search(r"\bkrok\b", texte, re.I) or (username and re.search(rf"@{re.escape(username)}\b", texte, re.I)))
+
+
+MOTS_COURTS = 3  # une réponse d'au plus trois mots, sans question, n'appelle pas de réponse (« ok », « merci », « mdr »)
+SYSTEME_NECESSAIRE = ("Tu décides si Krok, un bot dans un groupe d'amis, doit répondre à un message envoyé en réponse à l'un de ses messages. "
+                      "Réponds OUI seulement si ce message demande quelque chose, pose une question, ou apporte une information qui appelle vraiment une réaction. "
+                      "Réponds NON pour un remerciement, un accord, un rire, une simple réaction, ou un commentaire qui clôt l'échange. Un seul mot : OUI ou NON.")
+
+
+def reponse_necessaire(texte: str, message_de_krok: str, decideur) -> bool:
+    """Dans le groupe, répondre à un message de Krok ne suffit pas pour qu'il réponde à son tour : il faut que ce soit nécessaire.
+    Une question, ou une réponse à une question qu'il a posée, appelle toujours une réponse ; un message très court, jamais ; le reste est tranché par le modèle."""
+    if "?" in texte or "?" in message_de_krok:
+        return True
+    if len(texte.split()) <= MOTS_COURTS:
+        return False
+    try:
+        return decideur(SYSTEME_NECESSAIRE, f"Message de Krok : {message_de_krok}\nRéponse : {texte}").strip().upper().startswith("OUI")
+    except Exception:
+        return False
 
 
 def humeur(session: Session) -> str:
@@ -118,6 +147,8 @@ def composer(session: Session, personne: Personne, texte: str, lieu: str, achill
         systeme.append(f"Tu es dans le groupe, {nom_krok(personne)} t'écrit. Tout le monde lit tes réponses : rien de ce qui a été dit en privé ne s'y trouve, et tu n'en parles pas.")
         if groupe:
             systeme.append(f"Ce que tu sais de {personne.prenom} par le groupe :\n{groupe}")
+    if hasard.random() < CHANCE_CREATIF:
+        systeme.append(CONSIGNE_CREATIVE)
     surnoms = _consigne_surnoms(session)
     if surnoms:
         systeme.append(surnoms)

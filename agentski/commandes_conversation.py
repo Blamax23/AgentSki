@@ -50,6 +50,10 @@ async def reponse_libre(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                               and update.message.reply_to_message.from_user.id == context.bot.id)
         await commandes_blindtest.deviner(update, context, texte)  # une partie de blind test en cours lit les messages du groupe
         adresse = conversation.adresse_a_krok(texte, context.bot.username, reponse_au_bot)
+        if adresse is not None and reponse_au_bot and not conversation.cite_krok(texte, context.bot.username):
+            # simple réponse à l'un de ses messages, sans l'appeler : il ne répond que si c'est nécessaire
+            if not await asyncio.to_thread(conversation.reponse_necessaire, adresse, update.message.reply_to_message.text or "", ia.economique):
+                adresse = None
         if adresse is None:
             noter_dans_groupe(update, texte)  # il lit le groupe pour suivre la conversation, sans y répondre
             return

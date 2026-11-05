@@ -124,6 +124,13 @@ with SessionLocal() as s:
     def panne(*_):
         raise RuntimeError("modèle en panne")
     verifie("Horoscope du jour" in horoscope.horoscope(s, achille, panne, date(2026, 12, 12)), "modèle en panne : horoscope de secours")
+    prompts = []
+    for i, p in enumerate([maxime, adrien, achille]):
+        horoscope.horoscope(s, p, lambda syst, u: (prompts.append(u) or f"Texte numéro {len(prompts)}."), date(2026, 12, 20 + i), random.Random(i))
+    formes = {next(l for l in u.splitlines() if l.startswith("Forme imposée")) for u in prompts}
+    verifie(len(formes) >= 2, "horoscope : la forme imposée change d'une fois à l'autre")
+    verifie("Texte numéro 1." in prompts[1] and "Texte numéro 2." in prompts[2], "horoscope : les récents sont rappelés au modèle pour ne pas se répéter")
+    verifie(all("Chiffre du jour" in horoscope.horoscope(s, p, panne, date(2026, 12, 20 + i)) for i, p in enumerate([maxime, adrien, achille])), "horoscope : chiffre et couleur ajoutés par le code")
     verifie("ski" in horoscope.SYSTEME and "Aucune allusion au ski" in horoscope.SYSTEME, "horoscope : consigne sans ski")
 
     # --- Archives ---------------------------------------------------------------------------------------------

@@ -105,6 +105,24 @@ with SessionLocal() as s:
     conversation.noter_ambiance(s, adrien, "groupe", "un de plus")
     verifie(s.scalar(select(Souvenir).where(Souvenir.texte == "On part à 9h demain ?")) is None, "le contexte ancien est effacé")
 
+    # --- réponses courtes, créativité ponctuelle ---
+    verifie("une phrase le plus souvent" in conversation.PERSONNALITE, "style : une phrase le plus souvent")
+    verifie(conversation.CONSIGNE_CREATIVE in conversation.composer(s, maxime, "yo", "prive", False, toujours_c)[0] if (toujours_c := type("H", (), {"random": staticmethod(lambda: 0.0)})()) else False, "créativité : parfois, une réplique plus inventive")
+    verifie(conversation.CONSIGNE_CREATIVE not in conversation.composer(s, maxime, "yo", "prive", False, type("H", (), {"random": staticmethod(lambda: 0.99)})())[0], "créativité : le plus souvent, non")
+
+    # --- répondre à Krok ne suffit pas : il faut que ce soit nécessaire ---
+    def jamais_appele(*_):
+        raise AssertionError("le modèle ne doit pas être appelé")
+    verifie(conversation.reponse_necessaire("t'en penses quoi ?", "Salut", jamais_appele), "nécessaire : une question appelle une réponse")
+    verifie(conversation.reponse_necessaire("oui", "Tu veux que je te dise ?", jamais_appele), "nécessaire : répondre à une question qu'il a posée")
+    verifie(not conversation.reponse_necessaire("mdr ok", "Bien joué", jamais_appele), "pas nécessaire : message très court sans question")
+    verifie(conversation.reponse_necessaire("peux-tu me rappeler demain matin", "Je suis là", lambda *_: "OUI"), "nécessaire : le modèle tranche OUI")
+    verifie(not conversation.reponse_necessaire("ah ouais carrément c'est bien vu", "Je suis là", lambda *_: "NON"), "pas nécessaire : le modèle tranche NON")
+    def en_panne(*_):
+        raise RuntimeError("panne")
+    verifie(not conversation.reponse_necessaire("ah ouais carrément c'est bien vu", "Je suis là", en_panne), "modèle en panne : il se tait plutôt que de répondre à tout")
+    verifie(conversation.cite_krok("dis Krok", "krok_bot") and conversation.cite_krok("@krok_bot yo", "krok_bot") and not conversation.cite_krok("ok merci", "krok_bot"), "cite_krok : nom ou @ seulement")
+
     # --- mode Achille ---
     verifie(not conversation.mode_achille(s, 42), "Achille : désactivé par défaut")
     verifie(conversation.basculer_achille(s, 42) and conversation.mode_achille(s, 42), "Achille : /achille l'active")
