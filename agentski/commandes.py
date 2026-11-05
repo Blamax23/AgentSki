@@ -5,26 +5,72 @@ from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes, Mes
 from . import acces, amis, config
 from .db import SessionLocal
 
-AIDE = ("Voilà ce que je sais faire :\n"
-        "• /moment [texte] : poser un marqueur dans la journée\n"
-        "• /chute [prénom] [verte] : noter une chute (la tienne par défaut)\n"
-        "• /easter : ajouter une archive à la réserve de surprises (de préférence en privé)\n"
-        "• /chambre [prénom] : une archive tout de suite\n"
-        "• /idee [texte] : la boîte à idées de plans ; /suggestion [thème] : des idées trouvées sur le web\n"
-        "• /pari [texte], /paris, /resolu N Prénom : les paris\n"
-        "• /course [plat] : la liste de courses du week-end\n"
-        "• /defi : lancer un défi ; /ajout : alimenter les réserves en privé\n"
-        "• /son [titre ou lien] : ajouter un morceau à la playlist du week-end ; /play [titre], /file [titre] (file d'attente) et /pause : la musique sur l'appareil Spotify actif ; un titre écrit donne trois propositions à choisir ; /ics : les sorties dans ton agenda\n"
-        "• /stats [prénom|tous], /chrono piste 1:32, /fils, /afaire, /gopro : les repères et ce qui reste à faire\n"
-        "• Envoie-moi un fichier .fit ou .gpx de ta montre : j'en tire tes descentes, ton dénivelé et ta vitesse max (bonus, jamais comparé)\n"
-        "• /position explique le partage de position en direct ; /ou [prénom] et /rdv : où est le groupe, et où se retrouver\n"
-        "• Écris-moi pour discuter (ou /talk dans le groupe, ou « Krok, … ») : je retiens ce qu'on me dit ; /oublie l'efface, en privé ; /achille pour me faire parler comme lui\n"
-        "• /confessionnal : le plan du confessionnal de la soirée (organisateur, en privé)\n"
-        "• /kit : exporter ce qui a été vécu ; /episode lien titre et /vues : les chiffres YouTube\n"
-        "• /info [station], /meteo [station] [jour], /avalanche, /pointmeteo on 07:00 : météo et neige\n"
-        "• /citation [prénom] \"phrase\" : garder une phrase culte\n"
-        "• Envoie-moi tes photos et vidéos de moins de 20 Mo, je les range par journée.\n"
-        "• Le soir, je te demande ta note sur 10 et une phrase.")
+AIDE = """Voilà ce que je sais faire :
+
+🎿 Pendant le week-end
+/moment [texte] : poser un marqueur
+/chute [prénom] [verte] : noter une chute
+/citation [prénom] "phrase" : garder une phrase culte
+/chrono piste 1:32 : noter un chrono
+/gopro : à qui le tour de filmer
+/ou [prénom] : où est quelqu'un
+/rdv : un point de rendez-vous
+/position : partager ta position en direct
+/confessionnal : le plan de la soirée (organisateur)
+
+🌤 Météo et neige
+/info [station] : les conditions
+/meteo [station] [jour] : les prévisions
+/avalanche : le risque d'avalanche
+/pointmeteo on 07:00 : point météo chaque matin
+
+🎵 Musique
+/son [titre ou lien] : ajouter à la playlist
+/play [titre] : lancer sur l'appareil Spotify actif
+/file [titre] : mettre en file d'attente
+/pause : mettre en pause
+
+🎲 Jeux et défis
+/defi : lancer un défi
+/duel : un duel entre deux personnes
+/quicestce : qui a dit cette phrase ?
+/pari [texte] : lancer un pari
+/paris : les paris en cours
+/fils : paris et défis en cours
+/trophees : tes trophées
+
+💡 Idées et organisation
+/idee [texte] : la boîte à idées
+/suggestion [thème] : des idées trouvées sur le web
+/course [plat] : la liste de courses
+/ics : les sorties dans ton agenda
+/afaire : les pistes pas encore faites
+
+📊 Chiffres et souvenirs
+/stats [prénom|tous] : tes statistiques
+/journal : relire un week-end
+/kit : exporter ce qui a été vécu
+/episode lien titre : enregistrer un épisode
+/vues : les chiffres YouTube
+/capsule : remplir ta capsule temporelle
+
+😄 Surprises
+/easter : ajouter une archive (en privé)
+/chambre [prénom] : une archive tout de suite
+/ajout : alimenter les réserves (en privé)
+/preaud : le classement des Preaud
+/icham [phrase] : traduite en arabe
+/adrille_rallye : une pub
+
+🤖 Krok
+/talk [message] : discuter (ou écris-moi directement)
+/achille : Krok parle comme Achille
+/oublie : effacer ce que Krok sait de toi (en privé)
+
+📎 Sans commande
+Envoie-moi tes photos et vidéos de moins de 20 Mo : je les range par journée.
+Envoie-moi un fichier .fit ou .gpx de ta montre : j'en tire tes descentes.
+Le soir, je te demande ta note sur 10 et une phrase."""
 
 
 def _personne(session, update: Update):

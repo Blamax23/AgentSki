@@ -19,8 +19,8 @@ from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
 
 from . import acces, config, entretien, horloge, rappels
 from .db import SessionLocal
-from .models import (ChampJournal, Chute, Citation, Descente, Entretien, Journee, Moment, Personne, Presence, Rappel,
-                     Sequence, Transcription, Weekend)
+from .models import (Activite, ChampJournal, Chrono, Chute, Citation, Confessionnal, Defi, DefiVote, Descente, Entretien, Journee, Media,
+                     Moment, Morceau, Note, Personne, Position, Presence, Rappel, Reglage, Sequence, Transcription, Trophee, Weekend)
 
 
 def reserve(handler):
@@ -87,10 +87,27 @@ async def commande_pov(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(f"{n} descentes filmées par {personne.prenom} ajoutées (simulation).")
 
 
+# Les drapeaux « déjà envoyé » qui dépendent d'un week-end ou d'un jour : à vider avec lui, sinon la prochaine fois rien ne part.
+DRAPEAUX_VLOG = ("confessionnal:", "recap:", "briefing:", "easter:", "easter_fait:", "flash:", "flash_fait:", "bonnenuit:", "pointmeteo_fait:",
+                 "trophees_dernier", "avril", "nouvelan:", "souvenir:", "reactions:")
+
+
+def vider_vlog(session) -> None:
+    """Efface tout ce qui a été vécu ou simulé (week-ends, journées, journal, notes, médias, rappels, trophées, confessionnaux...).
+    Garde les personnes, les archives et leurs répliques, les idées, débats et plats, les réglages (groupe, playlist, point météo) et les morceaux."""
+    session.execute(Morceau.__table__.update().values(weekend_id=None, journee_id=None))
+    for table in (DefiVote, Defi, Confessionnal, ChampJournal, Transcription, Entretien, Chute, Moment, Citation, Note, Media, Rappel, Chrono,
+                  Activite, Position, Descente, Sequence, Presence, Journee, Weekend, Trophee):
+        session.execute(delete(table))
+    for prefixe in DRAPEAUX_VLOG:
+        session.execute(delete(Reglage).where(Reglage.cle.like(prefixe + "%")))
+    session.commit()
+
+
 async def commande_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "Vider week-ends, journées, présences, descentes, rappels, entretiens, chutes et faits du journal ? "
-        "Les personnes et leurs comptes ne sont pas touchés.",
+        "Vider week-ends, journées, journal, notes, médias, rappels, trophées et confessionnaux ? "
+        "Gardés : personnes, archives, idées, débats, plats, réglages et morceaux.",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Oui, vider", callback_data="sim|reset"),
                                             InlineKeyboardButton("Annuler", callback_data="sim|annule")]]))
 
@@ -100,11 +117,8 @@ async def bouton_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await query.answer()
     if query.data == "sim|reset":
         with SessionLocal() as session:
-            for table in (ChampJournal, Transcription, Entretien, Chute, Moment, Citation, Rappel, Descente, Sequence,
-                          Presence, Journee, Weekend):
-                session.execute(delete(table))
-            session.commit()
-        await query.edit_message_text("🧹 Fait : plus aucun week-end, rappel ni entretien en base.")
+            vider_vlog(session)
+        await query.edit_message_text("🧹 Fait : plus aucun week-end, journal, rappel ni trophée en base. Archives, idées, personnes et réglages gardés.")
     else:
         await query.edit_message_text("Annulé.")
 
