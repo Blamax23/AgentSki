@@ -1,4 +1,4 @@
-"""Playlist du week-end sur le compte Spotify de Maxime : /son [titre] ou un lien Spotify collé dans le groupe.
+"""Playlist unique du week-end annuel sur le compte Spotify de Maxime : /son [titre] ou un lien Spotify collé dans le groupe.
 
 Appels vérifiés sur la documentation officielle : POST /me/playlists, POST /playlists/{id}/items, GET /search (10 résultats
 au plus), renouvellement du jeton par POST accounts.spotify.com/api/token. L'aperçu audio n'existe plus (preview_url est abandonné).
@@ -121,20 +121,18 @@ def lire_morceau(track_id: str, http=_http) -> dict | None:
         raise
 
 
-def playlist_du_weekend(session: Session, weekend: Weekend, http=_http) -> str:
-    cle = f"playlist:{weekend.id}"
-    existante = reglage(session, cle)
+def playlist_annuelle(session: Session, http=_http) -> str:
+    """L'unique playlist, créée au premier ajout : celle qu'on écoutera pendant le week-end annuel."""
+    existante = reglage(session, "playlist_annuelle")
     if existante:
         return existante
-    d1, d2 = weekend.date_debut, weekend.date_fin
-    nom = f"Chronique ski — {d1.day} au {d2.day} {NOMS_MOIS[d2.month - 1]} {d2.year}" if d1 != d2 else f"Chronique ski — {d1.day} {NOMS_MOIS[d1.month - 1]} {d1.year}"
-    r = _api("POST", "/me/playlists", {"name": nom, "public": False, "description": "La bande-son de nos week-ends de ski"}, http)
-    definir_reglage(session, cle, r["id"])
+    r = _api("POST", "/me/playlists", {"name": config.PLAYLIST_NOM, "public": False, "description": "La bande-son du week-end annuel : tout le monde y ajoute ses morceaux"}, http)
+    definir_reglage(session, "playlist_annuelle", r["id"])
     return r["id"]
 
 
 def ajouter_morceau(session: Session, auteur: Personne, texte: str, http=_http) -> str:
-    """Ajoute un morceau (lien ou titre) à la playlist du week-end et le note au journal."""
+    """Ajoute un morceau (lien Spotify) à l'unique playlist du week-end annuel. Possible toute l'année, sans journée de ski."""
     if not configure():
         return ("Spotify n'est pas branché : il faut créer une application sur developer.spotify.com (compte Premium requis) "
                 "puis lancer scripts/spotify_autoriser.py. En attendant, /son ne peut rien ajouter.")
@@ -146,25 +144,25 @@ def ajouter_morceau(session: Session, auteur: Personne, texte: str, http=_http) 
         piste = lire_morceau(track_id, http) if track_id else None  # un titre écrit passe par proposer() : jamais le premier résultat au hasard
         if piste is None:
             return f"Je ne trouve pas « {texte} » sur Spotify." if track_id else "Il me faut un lien Spotify : pour chercher un titre, utilise /son titre."
-        journee = journee_du_jour(session, auteur)
-        weekend = session.get(Weekend, journee.weekend_id)
-        if session.scalar(select(Morceau.id).where(Morceau.weekend_id == weekend.id, Morceau.track_id == piste["id"])):
+        if session.scalar(select(Morceau.id).where(Morceau.track_id == piste["id"])):
             cle = f"monotitre:{auteur.id}"  # compteur pour le trophée Mono-titre
             definir_reglage(session, cle, str(int(reglage(session, cle) or 0) + 1))
-            return f"🎵 « {piste['name']} » est déjà dans la playlist de ce week-end."
-        playlist = playlist_du_weekend(session, weekend, http)
+            return f"🎵 « {piste['name']} » est déjà dans la playlist du week-end annuel."
+        playlist = playlist_annuelle(session, http)
         _api("POST", f"/playlists/{playlist}/items", {"uris": [piste["uri"]]}, http)
     except SpotifyAbsent:
         return "Spotify n'est pas configuré."
     except Exception:
         return "Spotify ne répond pas pour l'instant : le morceau n'est pas ajouté, réessaie dans un moment."
     artistes = ", ".join(a["name"] for a in piste.get("artists", []))
-    session.add(Morceau(weekend_id=weekend.id, journee_id=journee.id, personne_id=auteur.id, track_id=piste["id"], titre=piste["name"],
-                        artistes=artistes, cree_a=_maintenant_aware()))
-    session.add(ChampJournal(journee_id=journee.id, cle="morceau", valeur=f"{piste['name']} — {artistes}", phrase_source="Spotify",
-                             detail=auteur.prenom, verifie=True))
+    journee = session.scalar(select(Journee).where(Journee.jour == aujourdhui()))  # rattaché à la journée du jour seulement si elle existe
+    session.add(Morceau(weekend_id=journee.weekend_id if journee else None, journee_id=journee.id if journee else None, personne_id=auteur.id,
+                        track_id=piste["id"], titre=piste["name"], artistes=artistes, cree_a=_maintenant_aware()))
+    if journee:
+        session.add(ChampJournal(journee_id=journee.id, cle="morceau", valeur=f"{piste['name']} — {artistes}", phrase_source="Spotify",
+                                 detail=auteur.prenom, verifie=True))
     session.commit()
-    return f"🎵 Ajouté à la playlist : {piste['name']} — {artistes}"
+    return f"🎵 Ajouté à la playlist du week-end annuel : {piste['name']} — {artistes}"
 
 
 # --- Lecture sur un appareil Spotify -------------------------------------------------------------------------------

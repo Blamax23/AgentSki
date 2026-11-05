@@ -12,7 +12,7 @@ from telegram.ext import (Application, ApplicationHandlerStop, CallbackQueryHand
 
 from sqlalchemy import select
 
-from . import acces, amis, audio, commandes, commandes_position, commandes_stats, config, entretien, fun, ia, integrations, jeux, journal, previsions, rappels, simulation
+from . import acces, amis, audio, commandes, commandes_position, commandes_stats, config, entretien, fun, ia, integrations, jeux, journal, previsions, rappels, regles, simulation
 from .db import SessionLocal, seed_personnes, sync_allowed_users
 from .models import Personne
 
@@ -268,7 +268,8 @@ def main() -> None:
         sync_allowed_users(session)
 
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).post_init(declarer_menu).build()
-    app.add_handler(TypeHandler(Update, liste_blanche), group=-1)
+    app.add_handler(TypeHandler(Update, liste_blanche), group=-3)
+    regles.installer(app)  # où et quand chaque commande est permise (groupe -2)
     commandes.installer(app)
     fun.installer(app)
     jeux.installer(app)

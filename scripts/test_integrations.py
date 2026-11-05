@@ -146,8 +146,9 @@ with SessionLocal() as s:
 
     spotify._http = http
     a(2026, 12, 12, 15, 0)
+    amis.journee_du_jour(s, maxime)  # une journée de ski existe : le morceau y sera aussi noté au journal
     reponse = spotify.ajouter_morceau(s, maxime, "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http)
-    verifie("Ajouté à la playlist : Get Lucky — Daft Punk" in reponse, "/son avec un lien : morceau lu puis ajouté")
+    verifie("Ajouté à la playlist du week-end annuel : Get Lucky — Daft Punk" in reponse, "/son avec un lien : morceau lu puis ajouté à la playlist du week-end annuel")
     jeton = journal[0]
     verifie(jeton[1] == "https://accounts.spotify.com/api/token" and jeton[2]["Authorization"].startswith("Basic ")
             and "grant_type=refresh_token" in jeton[3].decode() and "refresh_token=refresh1" in jeton[3].decode(), "jeton renouvelé avec le refresh token, en Basic")
@@ -155,12 +156,19 @@ with SessionLocal() as s:
     lecture = next(c for c in journal if "/tracks/4uLU6hMCjMI75M1A2tKUQC" in c[1])
     verifie(lecture[2]["Authorization"] == "Bearer AT" and not any("/search" in c[1] for c in journal), "ajout par lien : lecture exacte du morceau, aucune recherche au hasard")
     creation = next(c for c in journal if c[1].endswith("/me/playlists"))
-    verifie(json.loads(creation[3])["public"] is False and "Chronique ski" in json.loads(creation[3])["name"], "playlist créée en privé, nommée d'après le week-end")
+    verifie(json.loads(creation[3])["public"] is False and json.loads(creation[3])["name"] == "Chronique ski — week-end annuel", "une seule playlist, demandée en privé, nommée « week-end annuel »")
     ajout = next(c for c in journal if c[1].endswith("/playlists/PL1/items"))
     verifie(ajout[0] == "POST" and json.loads(ajout[3]) == {"uris": ["spotify:track:4uLU6hMCjMI75M1A2tKUQC"]}, "ajout par POST /playlists/{id}/items avec l'URI")
     verifie(s.scalar(select(ChampJournal).where(ChampJournal.cle == "morceau")).valeur == "Get Lucky — Daft Punk", "le morceau est noté au journal")
     verifie("déjà dans la playlist" in spotify.ajouter_morceau(s, maxime, "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http), "doublon refusé, rien d'ajouté deux fois")
-    verifie(len([c for c in journal if c[1].endswith("/me/playlists")]) == 1, "la playlist du week-end n'est créée qu'une fois")
+    verifie(len([c for c in journal if c[1].endswith("/me/playlists")]) == 1, "la playlist annuelle n'est créée qu'une fois, même pour plusieurs morceaux")
+    a(2027, 7, 14, 10, 0)  # un jour d'été, aucune journée de ski : on peut quand même alimenter la playlist du week-end annuel
+    nb_journees = s.query(Journee).count()
+    verifie("Billie Jean" in spotify.ajouter_morceau(s, maxime, "https://open.spotify.com/track/5ChkMS8OtdzJeqyybCc9R5", http), "/son en été : la playlist se remplit toute l'année")
+    verifie(s.query(Journee).count() == nb_journees and s.scalar(select(Morceau).where(Morceau.track_id == "5ChkMS8OtdzJeqyybCc9R5")).weekend_id is None,
+            "…sans créer de journée de ski ni rattacher le morceau à un week-end")
+    verifie(len([c for c in journal if c[1].endswith("/me/playlists")]) == 1, "…et toujours dans la même playlist, sans en créer une seconde")
+    a(2026, 12, 12, 15, 0)
     verifie("Billie Jean" in spotify.ajouter_morceau(s, maxime, "https://open.spotify.com/track/5ChkMS8OtdzJeqyybCc9R5", http), "lien collé : le morceau est lu puis ajouté")
     def inconnu(methode, url, entetes, corps=None):
         if "/tracks/" in url:
