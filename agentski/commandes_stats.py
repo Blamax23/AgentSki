@@ -4,9 +4,9 @@ import io
 from datetime import datetime
 
 from telegram import Update
-from telegram.ext import CommandHandler, ContextTypes
+from telegram.ext import CommandHandler, ContextTypes, MessageHandler, filters
 
-from . import acces, amis, stats, youtube
+from . import acces, activites, amis, stats, youtube
 from .db import SessionLocal
 
 
@@ -75,7 +75,23 @@ async def commande_vues(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(await asyncio.to_thread(calcul))
 
 
+def _analyser_fichier(telegram_id: int, nom: str, octets: bytes) -> str:
+    with SessionLocal() as session:
+        return activites.enregistrer(session, acces.personne_connue(session, telegram_id), nom, octets)
+
+
+async def fichier_activite(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Un fichier .fit ou .gpx envoyé par n'importe quelle personne autorisée : descentes, dénivelé, vitesse, rangés dans sa journée."""
+    document = update.message.document
+    if document.file_size and document.file_size > 20 * 1024 * 1024:
+        await update.message.reply_text("Trop lourd (plus de 20 Mo) : je ne peux pas le télécharger.")
+        return
+    octets = bytes(await (await document.get_file()).download_as_bytearray())
+    await update.message.reply_text(await asyncio.to_thread(_analyser_fichier, update.effective_user.id, document.file_name or "activite.fit", octets))
+
+
 def installer(app) -> None:
+    app.add_handler(MessageHandler(filters.Document.FileExtension("fit") | filters.Document.FileExtension("gpx"), fichier_activite))
     for nom, fonction in (("stats", commande_stats), ("chrono", commande_chrono), ("fils", commande_fils), ("afaire", commande_afaire),
                           ("gopro", commande_gopro), ("kit", commande_kit), ("episode", commande_episode), ("vues", commande_vues)):
         app.add_handler(CommandHandler(nom, fonction))

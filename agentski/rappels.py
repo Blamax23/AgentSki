@@ -36,6 +36,11 @@ def _jour_lisible(d: date) -> str:
     return f"{NOMS_JOURS[d.weekday()].capitalize()} {d.day} {NOMS_MOIS[d.month - 1]}"
 
 
+def milliers(n: float | int) -> str:
+    """12345 devient « 12 345 » (espace des milliers français), sans toucher au reste de la phrase."""
+    return f"{int(n):,}".replace(",", " ")
+
+
 def _de(prenom: str) -> str:
     """« de Maxime », mais « d'Adrien » et « d'Achille »."""
     return f"d'{prenom}" if prenom[0].lower() in "aeiouyhéèâî" else f"de {prenom}"

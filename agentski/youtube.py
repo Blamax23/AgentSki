@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from . import config
 from .models import Episode
+from .rappels import milliers
 
 URL = "https://www.googleapis.com/youtube/v3/videos"
 VIDEO = re.compile(r"(?:v=|youtu\.be/|/shorts/|/embed/)([A-Za-z0-9_-]{11})")
@@ -58,7 +59,7 @@ def vues(session: Session, http=_http) -> str:
         if s is None:
             lignes.append(f"• {e.titre} : introuvable (vidéo supprimée ou privée ?)")
             continue
-        morceaux = [f"{int(s['viewCount']):,} vue".replace(",", " ") + ("s" if int(s["viewCount"]) > 1 else "")] if "viewCount" in s else []
+        morceaux = [f"{milliers(s['viewCount'])} vue" + ("s" if int(s["viewCount"]) > 1 else "")] if "viewCount" in s else []
         if "likeCount" in s:
             morceaux.append(f"{int(s['likeCount'])} j'aime")
         if "commentCount" in s:

@@ -356,3 +356,24 @@ class Episode(Base):
     titre: Mapped[str] = mapped_column(String(200))
     video_id: Mapped[str] = mapped_column(String(20), unique=True)
     cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Activite(Base):
+    """Fichier d'activité (FIT ou GPX) envoyé par une personne : seuls des résumés sont gardés, jamais la trace complète."""
+    __tablename__ = "activite"
+    __table_args__ = (UniqueConstraint("personne_id", "empreinte"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    personne_id: Mapped[int] = mapped_column(ForeignKey("personne.id"))
+    journee_id: Mapped[int | None] = mapped_column(ForeignKey("journee.id"))
+    source: Mapped[str] = mapped_column(String(5))  # fit | gpx
+    empreinte: Mapped[str] = mapped_column(String(60))  # début + durée + nombre de descentes : détecte un fichier reçu deux fois
+    debut: Mapped[datetime] = mapped_column(DateTime)  # UTC naïf
+    duree_s: Mapped[int] = mapped_column(Integer)
+    nb_descentes: Mapped[int] = mapped_column(Integer)
+    denivele_neg: Mapped[int] = mapped_column(Integer)  # mètres, somme des descentes
+    vitesse_max: Mapped[float | None]  # km/h
+    premiere_descente: Mapped[datetime | None] = mapped_column(DateTime)
+    derniere_descente: Mapped[datetime | None] = mapped_column(DateTime)
+    segments: Mapped[str] = mapped_column(Text, default="[]")  # JSON : début, milieu et fin de chaque descente (3 points), pas la trace
+    cree_a: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

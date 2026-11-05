@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from . import config, defis, meteo
 from .amis import aujourdhui, groupe_id, reglage
 from .horloge import maintenant, vers_paris
-from .models import (ChampJournal, Chute, Citation, Defi, Journee, Media, Moment, Note, Personne, Presence, Reglage, Weekend)
+from .models import (Activite, ChampJournal, Chute, Citation, Defi, Journee, Media, Moment, Note, Personne, Presence, Reglage, Weekend)
+from .rappels import milliers
 from .surprises import Evenement, _une_fois
 
 SAISON = ((11, 15), (4, 30))  # le point météo ne part qu'en saison : un oubli ne réveille personne en juillet
@@ -112,6 +113,9 @@ def faits_recap(session: Session, weekend: Weekend) -> list[str]:
     medias = session.scalar(select(func.count()).select_from(Media).where(Media.journee_id.in_(ids)))
     if medias:
         faits.append(f"{medias} photo{'s' if medias > 1 else ''} ou vidéo{'s' if medias > 1 else ''} partagée{'s' if medias > 1 else ''}")
+    fichiers = session.execute(select(func.count(), func.sum(Activite.nb_descentes), func.sum(Activite.denivele_neg)).where(Activite.journee_id.in_(ids))).one()
+    if fichiers[0]:  # seulement des totaux du groupe : jamais un écart entre deux personnes
+        faits.append(f"{fichiers[1]} descentes mesurées dans {fichiers[0]} fichier{'s' if fichiers[0] > 1 else ''} d'activité, {milliers(fichiers[2])} m de dénivelé négatif cumulés")
     moyenne = session.scalar(select(func.avg(Note.note)).where(Note.journee_id.in_(ids)))
     if moyenne is not None:
         faits.append(f"note moyenne du week-end : {moyenne:.1f}/10")

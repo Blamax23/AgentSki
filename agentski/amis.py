@@ -51,9 +51,9 @@ def _presence(session: Session, journee: Journee, personne: Personne) -> None:
         session.add(Presence(journee_id=journee.id, personne_id=personne.id))
 
 
-def journee_du_jour(session: Session, personne: Personne) -> Journee:
-    """La journée de ski d'aujourd'hui, créée au besoin : agir dans le bot (marqueur, chute…) vaut présence."""
-    jour = aujourdhui()
+def journee_du_jour(session: Session, personne: Personne, jour: date | None = None) -> Journee:
+    """La journée de ski d'aujourd'hui (ou du `jour` donné), créée au besoin : agir dans le bot vaut présence."""
+    jour = jour or aujourdhui()
     journee = session.scalar(select(Journee).where(Journee.jour == jour))
     if journee is None:
         weekend = session.scalar(select(Weekend).where(Weekend.date_debut <= jour, Weekend.date_fin >= jour,
