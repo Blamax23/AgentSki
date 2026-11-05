@@ -4,9 +4,9 @@ import logging
 import random
 
 from telegram import Update
-from telegram.ext import CommandHandler, ContextTypes
+from telegram.ext import CommandHandler, ContextTypes, MessageHandler, filters
 
-from . import acces, conversation, ia
+from . import acces, amis, conversation, ia, reactions
 from .db import SessionLocal
 
 log = logging.getLogger("agentski")
@@ -64,6 +64,23 @@ async def commande_achille(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await update.message.reply_text(random.choice(conversation.ANNONCES_ACHILLE) if actif else "Mode Achille coupé : je redeviens Krok, tout simplement.")
 
 
+async def reagir(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Pose parfois une réaction-emoji sur un message du groupe (le groupe de la série uniquement)."""
+    message = update.message
+    if message is None or update.effective_chat.type == "private":
+        return
+    with SessionLocal() as session:
+        if update.effective_chat.id != amis.groupe_id(session):
+            return
+        emoji = reactions.choisir(session, message.text or message.caption or "")
+    if emoji:
+        try:
+            await message.set_reaction(emoji)
+        except Exception:
+            log.warning("Réaction %s refusée", emoji)
+
+
 def installer(app) -> None:
+    app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO | filters.VIDEO) & ~filters.COMMAND, reagir), group=7)  # groupe à part : n'empêche pas la réponse normale
     for nom, fonction in (("talk", commande_talk), ("oublie", commande_oublie), ("achille", commande_achille)):
         app.add_handler(CommandHandler(nom, fonction))

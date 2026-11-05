@@ -128,11 +128,11 @@ async def commande_anniversaire(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 def _evenements() -> list[surprises.Evenement]:
-    from . import agenda, briefing, positions, trophees
+    from . import agenda, bonnenuit, briefing, positions, trophees
     with SessionLocal() as session:
         positions.maintenance(session)  # déduit les pistes du soir et efface les positions du week-end terminé
         return (surprises.evenements(session, ia.creatif) + briefing.evenements_meteo(session, ia.creatif)
-                + agenda.question_alix(session) + trophees.evenements(session))
+                + agenda.question_alix(session) + trophees.evenements(session) + bonnenuit.evenements(session, ia.creatif))
 
 
 async def envoyer_evenements(context: ContextTypes.DEFAULT_TYPE) -> None:
