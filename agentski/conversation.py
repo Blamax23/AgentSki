@@ -11,7 +11,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from . import config, regles
-from .amis import aujourdhui, definir_reglage, reglage
+from .amis import aujourdhui, definir_reglage, nom_krok, reglage
 from .horloge import maintenant, vers_paris, vers_utc
 from .models import Memoire, Personne, Reglage, Souvenir
 
@@ -90,6 +90,16 @@ def _resume(session: Session, personne: Personne, lieu: str) -> str:
     return (m.resume if m else "").strip()
 
 
+def _consigne_surnoms(session: Session) -> str:
+    """Les surnoms donnés par l'organisateur : Krok n'emploie plus que ceux-là pour parler des personnes qui en ont un."""
+    avec = list(session.scalars(select(Personne).where(Personne.surnom.is_not(None))))
+    if not avec:
+        return ""
+    liste = ", ".join(f"{p.prenom} s'appelle désormais « {p.surnom} »" for p in avec)
+    return (f"Surnoms : {liste}. Tu appelles ces personnes uniquement par leur surnom, tout le temps, et jamais par leur prénom. "
+            "Si quelqu'un écrit leur prénom, tu comprends de qui il s'agit mais tu réponds avec le surnom.")
+
+
 def composer(session: Session, personne: Personne, texte: str, lieu: str, achille: bool, hasard=random) -> tuple[str, list[dict]]:
     """Le message système et la conversation remis au modèle. Dans le groupe, aucune trace du privé."""
     maintenant_paris = vers_paris(maintenant())
@@ -99,28 +109,31 @@ def composer(session: Session, personne: Personne, texte: str, lieu: str, achill
     groupe = _resume(session, personne, "groupe")
     if lieu == "prive":
         prive = _resume(session, personne, "prive")
-        systeme.append(f"Tu parles en privé avec {personne.prenom}.")
+        systeme.append(f"Tu parles en privé avec {nom_krok(personne)}.")
         if prive:
             systeme.append(f"Ce que tu sais de {personne.prenom} par vos conversations privées :\n{prive}")
         if groupe:
             systeme.append(f"Ce que tu sais de {personne.prenom} par le groupe :\n{groupe}")
     else:
-        systeme.append(f"Tu es dans le groupe, {personne.prenom} t'écrit. Tout le monde lit tes réponses : rien de ce qui a été dit en privé ne s'y trouve, et tu n'en parles pas.")
+        systeme.append(f"Tu es dans le groupe, {nom_krok(personne)} t'écrit. Tout le monde lit tes réponses : rien de ce qui a été dit en privé ne s'y trouve, et tu n'en parles pas.")
         if groupe:
             systeme.append(f"Ce que tu sais de {personne.prenom} par le groupe :\n{groupe}")
+    surnoms = _consigne_surnoms(session)
+    if surnoms:
+        systeme.append(surnoms)
     if achille:
         systeme.append(STYLE_ACHILLE)
         if hasard.random() < CHANCE_DISNEY:
             systeme.append(CONSIGNE_DISNEY)
     messages: list[dict] = []
     for sv in _souvenirs(session, personne, lieu):
-        auteur = session.get(Personne, sv.personne_id).prenom
+        auteur = nom_krok(session.get(Personne, sv.personne_id))
         role, contenu = ("assistant", sv.texte) if sv.role == "bot" else ("user", sv.texte if lieu == "prive" else f"{auteur} : {sv.texte}")
         if messages and messages[-1]["role"] == role:
             messages[-1]["content"] += "\n" + contenu  # deux messages de même rôle de suite sont fusionnés
         else:
             messages.append({"role": role, "content": contenu})
-    courant = texte if lieu == "prive" else f"{personne.prenom} : {texte}"
+    courant = texte if lieu == "prive" else f"{nom_krok(personne)} : {texte}"
     if messages and messages[-1]["role"] == "user":
         messages[-1]["content"] += "\n" + courant
     else:

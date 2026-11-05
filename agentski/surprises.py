@@ -6,11 +6,11 @@ import random
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from . import config
-from .amis import _maintenant_aware, aujourdhui, groupe_id, reglage, definir_reglage
+from .amis import _maintenant_aware, aujourdhui, groupe_id, nom_krok, reglage, definir_reglage, trouver_personne
 from .horloge import maintenant, vers_paris
 from .models import Archive, Chute, ChampJournal, Journee, Moment, Personne, Presence, Replique
 from .rappels import Message
@@ -88,7 +88,7 @@ def tirer(session: Session, cible: str | None = None) -> Archive | None:
     """Une archive prête, au hasard parmi les moins souvent envoyées ; si `cible` est donnée, une archive sur cette personne."""
     requete = select(Archive).where(Archive.etape == "ok")
     if cible:
-        personne = session.scalar(select(Personne).where(func.lower(Personne.prenom) == cible.strip().lower()))
+        personne = trouver_personne(session, cible)
         if personne is None:
             return None
         requete = requete.where(Archive.cible_id == personne.id)
@@ -105,11 +105,39 @@ def _contexte_du_jour(session: Session, personne: Personne) -> str:
     return f"{personne.prenom} a {chutes} chute{'s' if chutes != 1 else ''} notée{'s' if chutes != 1 else ''} aujourd'hui."
 
 
+LIBELLES_TYPE = {"photo": "photo", "video": "vidéo", "animation": "GIF", "document": "fichier"}
+
+
+def lister_archives(session: Session) -> str:
+    """/archives (organisateur, en privé) : toutes les archives prêtes, numérotées, avec auteur, cible et description."""
+    archives = list(session.scalars(select(Archive).where(Archive.etape == "ok").order_by(Archive.id)))
+    if not archives:
+        return "Aucune archive pour l'instant."
+    lignes = []
+    for a in archives:
+        auteur = session.get(Personne, a.auteur_id).prenom
+        cible = session.get(Personne, a.cible_id).prenom if a.cible_id else "personne en particulier"
+        lignes.append(f"#{a.id} · {LIBELLES_TYPE.get(a.type or '', a.type or '?')} · par {auteur} · sur {cible} · {a.nb_envois} envoi{'s' if a.nb_envois > 1 else ''}\n   « {a.description or 'sans description'} »")
+    return f"🗂 {len(archives)} archive{'s' if len(archives) > 1 else ''} (/retirer_archive N pour en supprimer une) :\n\n" + "\n".join(lignes)
+
+
+def retirer_archive(session: Session, numero: int) -> str:
+    """Supprime l'archive et ses répliques : le média ne ressortira plus jamais."""
+    archive = session.get(Archive, numero)
+    if archive is None:
+        return f"Pas d'archive #{numero}."
+    description = archive.description or "sans description"
+    session.execute(delete(Replique).where(Replique.archive_id == archive.id))  # d'abord les répliques : elles pointent vers l'archive
+    session.delete(archive)
+    session.commit()
+    return f"🗑 Archive #{numero} supprimée : « {description} »."
+
+
 def improviser_ligne(session: Session, archive: Archive, generateur) -> str:
     """Une ligne courte et taquine sur l'archive, jamais la même deux fois pour cette archive."""
     cible = session.get(Personne, archive.cible_id) if archive.cible_id else None
     precedentes = [r.texte for r in session.scalars(select(Replique).where(Replique.archive_id == archive.id))]
-    demande = (f"Média envoyé au groupe. Personne visée : {cible.prenom if cible else 'personne en particulier'}.\n"
+    demande = (f"Média envoyé au groupe. Personne visée : {nom_krok(cible) if cible else 'personne en particulier'}.\n"
                f"Ce qu'on voit, selon celui qui l'a ajouté : {archive.description or 'rien de précis'}.\n"
                + (("Lignes déjà utilisées sur cette archive, à ne pas répéter :\n- " + "\n- ".join(precedentes) + "\n") if precedentes else "")
                + "Écris la ligne qui accompagne le média, et rien d'autre.")
@@ -122,7 +150,7 @@ def improviser_ligne(session: Session, archive: Archive, generateur) -> str:
         if ligne and ligne not in precedentes:
             break
     if not ligne or ligne in precedentes:
-        ligne = f"{cible.prenom + ', ' if cible else ''}ça ne s'oublie pas 🤣"
+        ligne = f"{nom_krok(cible) + ', ' if cible else ''}ça ne s'oublie pas 🤣"
     session.add(Replique(archive_id=archive.id, texte=ligne, cree_a=_maintenant_aware()))
     archive.nb_envois += 1
     session.commit()
@@ -288,8 +316,8 @@ def evenements(session: Session, generateur) -> list[Evenement]:
             if (p.anniversaire.month, p.anniversaire.day) == (aujourd.month, aujourd.day) and _une_fois(session, f"anniv:{p.id}:{aujourd.year}"):
                 archive = tirer(session, p.prenom)
                 if archive is None:
-                    sortie.append(Evenement(p.telegram_id, f"🎂 Joyeux anniversaire {p.prenom} ! Aucune archive sur toi, ça s'arrangera."))
+                    sortie.append(Evenement(p.telegram_id, f"🎂 Joyeux anniversaire {nom_krok(p)} ! Aucune archive sur toi, ça s'arrangera."))
                 else:
-                    sortie.append(Evenement(p.telegram_id, f"🎂 Joyeux anniversaire {p.prenom} ! Ton cadeau : "
+                    sortie.append(Evenement(p.telegram_id, f"🎂 Joyeux anniversaire {nom_krok(p)} ! Ton cadeau : "
                                             + improviser_ligne(session, archive, generateur), (archive.type, archive.file_id)))
     return sortie

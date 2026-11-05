@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import defis
+from .amis import nom_krok, trouver_personne
 from .models import Citation, Devinette, DevinetteReponse, Personne
 
 PREAUD = ("Moi, Krok le bot, voici mon classement des Preaud préférés : \n1. Roland\n2. Patrick\n3. Marion\n4. La PS4 d'Achille\n5. Alix\n6. Hercule Preaud (le futur fils d'Achille)\n7. Préau de ma cour d'école\n8. Achille")
@@ -43,7 +44,7 @@ def _personnes_citees(session: Session, args: list[str]) -> tuple[list[Personne]
     """Les personnes reconnues dans les arguments, et les mots qui ne désignent personne."""
     trouvees, inconnus = [], []
     for mot in args:
-        p = session.scalar(select(Personne).where(func.lower(Personne.prenom) == mot.strip().lower()))
+        p = trouver_personne(session, mot)
         if p is None:
             inconnus.append(mot)
         elif p not in trouvees:
@@ -70,10 +71,10 @@ def duel(session: Session, args: list[str], generateur) -> str:
         recit = generateur("Tu es Krok, le bot d'un groupe d'amis. Tu commentes un duel avec l'emphase d'un commentateur sportif. Tu inventes une "
                            "discipline absurde, sans aucun rapport avec le ski, la neige ou la montagne. Trois phrases au plus, un emoji au plus. "
                            "Tu n'inventes aucun fait réel sur les personnes et tu ne les rabaisses pas. Le vainqueur est imposé, tu ne le changes pas.",
-                           f"Le duel oppose {a.prenom} et {b.prenom}. Vainqueur imposé : {gagnant.prenom}.").strip()
+                           f"Le duel oppose {nom_krok(a)} et {nom_krok(b)}. Vainqueur imposé : {nom_krok(gagnant)}.").strip()
     except Exception:
         recit = ""
-    return f"⚔️ {a.prenom} contre {b.prenom}\n" + (recit + "\n" if recit else "") + f"🏆 Vainqueur : {gagnant.prenom}"
+    return f"⚔️ {nom_krok(a)} contre {nom_krok(b)}\n" + (recit + "\n" if recit else "") + f"🏆 Vainqueur : {nom_krok(gagnant)}"
 
 
 # --- Qui est-ce ? ---------------------------------------------------------------------------------------------

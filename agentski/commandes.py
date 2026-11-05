@@ -34,6 +34,8 @@ AIDE = """Voilà ce que je sais faire :
 /defi : lancer un défi
 /duel : un duel entre deux personnes
 /quicestce : qui a dit cette phrase ?
+/blindtest [manches] : un blind test sur la playlist (dans le groupe)
+/horoscope [prénom] : l'horoscope du jour
 /pari [texte] : lancer un pari
 /paris : les paris en cours
 /fils : paris et défis en cours
@@ -192,6 +194,9 @@ async def _faire_voir_a_krok(update: Update, context: ContextTypes.DEFAULT_TYPE,
     lieu = "prive" if prive else "groupe"
     auteur = update.effective_user.first_name
     legende = (m.caption or "").strip()
+    adresse = conversation.adresse_a_krok(legende, context.bot.username, bool(m.reply_to_message and m.reply_to_message.from_user
+                                                                         and m.reply_to_message.from_user.id == context.bot.id)) if legende or m.reply_to_message else None
+    veut_reponse = bool(adresse) or (prive and legende.endswith("?"))
     if type_ in ("photo", "document") and (type_ == "photo" or (m.document and (m.document.mime_type or "").startswith("image/"))):
         if fichier.file_size and fichier.file_size > TAILLE_MAX_ANALYSE:
             texte = f"[photo envoyée par {auteur}, trop lourde pour que je la regarde]"
@@ -202,6 +207,8 @@ async def _faire_voir_a_krok(update: Update, context: ContextTypes.DEFAULT_TYPE,
                 texte = f"[photo envoyée par {auteur} : {description}]"
             except Exception:
                 logging.getLogger("agentski").exception("Description de photo échouée")
+                if veut_reponse:
+                    await m.reply_text("Je n'arrive pas à regarder cette photo pour l'instant, réessaie dans un instant.")
                 return
     elif type_ == "video":
         texte = f"[vidéo envoyée par {auteur}, non analysée]"
@@ -211,14 +218,10 @@ async def _faire_voir_a_krok(update: Update, context: ContextTypes.DEFAULT_TYPE,
         texte += f" Légende : {legende}"
     with SessionLocal() as session:
         personne = _personne(session, update)
-        if personne is None:
-            return
-        if not prive and update.effective_chat.id != amis.groupe_id(session):
+        if personne is None or (not prive and not amis.groupe_autorise(session, update.effective_chat.id)):
             return
         conversation.noter_ambiance(session, personne, lieu, texte)
-    adresse = conversation.adresse_a_krok(legende, context.bot.username, bool(m.reply_to_message and m.reply_to_message.from_user
-                                                                         and m.reply_to_message.from_user.id == context.bot.id)) if legende or m.reply_to_message else None
-    if adresse or (prive and legende.endswith("?")):
+    if veut_reponse:
         await commandes_conversation.converser(update, context, adresse or legende)
 
 

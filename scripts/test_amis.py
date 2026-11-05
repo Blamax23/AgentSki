@@ -132,7 +132,7 @@ def maj(uid, texte=None, args=(), chat="private", reponse_a=None, **extra):
     msg = SimpleNamespace(text=texte, reply_text=AsyncMock(), reply_to_message=SimpleNamespace(message_id=reponse_a) if reponse_a else None,
                           caption=extra.get("caption"), photo=extra.get("photo"), video=None, animation=None, document=None)
     return SimpleNamespace(message=msg, effective_user=SimpleNamespace(id=uid, first_name="T"),
-                           effective_chat=SimpleNamespace(id=77, type=chat)), SimpleNamespace(args=list(args), bot=SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=900))))
+                           effective_chat=SimpleNamespace(id=77, type=chat)), SimpleNamespace(args=list(args), bot=SimpleNamespace(send_message=AsyncMock(return_value=SimpleNamespace(message_id=900)), username="krok_bot", id=1))
 
 
 async def telegram():
@@ -164,7 +164,6 @@ async def telegram():
     ia.decrire_image = lambda octets, legende=None: "un chalet sous la neige"
     fichier = SimpleNamespace(file_id="P3", file_size=2000, get_file=AsyncMock(return_value=SimpleNamespace(download_as_bytearray=AsyncMock(return_value=bytearray(b"xx")))))
     up, ctx = maj(2, photo=[fichier], caption="Vue du chalet", chat="group")
-    ctx.bot.username, ctx.bot.id = "krok_bot", 1
     await commandes.media(up, ctx)
     with SessionLocal() as s:
         sv = s.scalar(select(Souvenir).where(Souvenir.texte.contains("chalet sous la neige")))

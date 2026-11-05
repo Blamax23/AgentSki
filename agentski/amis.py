@@ -44,6 +44,47 @@ def groupe_id(session: Session) -> int | None:
     return int(v) if v else None
 
 
+def nom_krok(personne: Personne) -> str:
+    """Le nom que Krok emploie pour parler de cette personne : son surnom si l'organisateur lui en a donné un, sinon son prénom."""
+    return personne.surnom or personne.prenom
+
+
+def trouver_personne(session: Session, mot: str) -> Personne | None:
+    """Une personne désignée par son prénom ou son surnom, sans tenir compte des majuscules."""
+    mot = mot.strip().lower()
+    return session.scalar(select(Personne).where(func.lower(Personne.prenom) == mot)) or \
+        session.scalar(select(Personne).where(func.lower(Personne.surnom) == mot))
+
+
+def definir_surnom(session: Session, prenom: str, surnom: str | None) -> str:
+    """Donne (ou retire, avec surnom=None) le surnom d'une personne. Réservé à l'organisateur par la table des règles."""
+    personne = session.scalar(select(Personne).where(func.lower(Personne.prenom) == prenom.strip().lower()))
+    if personne is None:
+        return f"Je ne connais pas « {prenom} »."
+    if surnom is None:
+        personne.surnom = None
+        session.commit()
+        return f"🧽 Surnom retiré : Krok appellera de nouveau {personne.prenom} par son prénom."
+    surnom = surnom.strip()[:50]
+    autre = session.scalar(select(Personne).where(func.lower(Personne.prenom) == surnom.lower()))
+    if autre is not None and autre.id != personne.id:
+        return f"« {surnom} » est le prénom de {autre.prenom} : choisis un autre surnom."
+    personne.surnom = surnom
+    session.commit()
+    return f"✅ À partir de maintenant, Krok appelle {personne.prenom} « {surnom} »."
+
+
+def lister_surnoms(session: Session) -> str:
+    lignes = [f"{p.prenom} → {p.surnom or '(aucun)'}" for p in session.scalars(select(Personne).where(Personne.actif.is_(True)).order_by(Personne.id))]
+    return "🏷 Surnoms (/surnom Prénom Surnom, ou /surnom Prénom - pour le retirer) :\n" + "\n".join(lignes)
+
+
+def groupe_autorise(session: Session, chat_id: int) -> bool:
+    """Le groupe de la série. Tant que /groupe n'a pas été tapé, aucun n'est enregistré : on n'écarte alors aucun groupe."""
+    enregistre = groupe_id(session)
+    return enregistre is None or chat_id == enregistre
+
+
 # --- Journée du jour ----------------------------------------------------------
 
 def _presence(session: Session, journee: Journee, personne: Personne) -> None:

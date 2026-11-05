@@ -193,7 +193,7 @@ def _choisir_appareil(appareils: list[dict]) -> tuple[dict | None, str]:
     return None, f"Plusieurs appareils Spotify ({noms}) mais aucun n'est actif : lance un morceau sur celui que tu veux, puis réessaie."
 
 
-def lancer_musique(auteur_texte: str, http=_http) -> str:
+def lancer_musique(auteur_texte: str, http=_http, position_ms: int | None = None) -> str:
     """/play [titre ou lien] : lance le morceau sur l'appareil Spotify actif ; sans argument, reprend la lecture.
     Le son sort de l'appareil où Spotify est ouvert, jamais de Telegram ni du serveur."""
     if not configure():
@@ -207,6 +207,8 @@ def lancer_musique(auteur_texte: str, http=_http) -> str:
             if piste is None:
                 return f"Je ne trouve pas « {texte} » sur Spotify." if track_id else "Il me faut un lien Spotify : pour chercher un titre, utilise /play titre."
             corps = {"uris": [piste["uri"]]}
+            if position_ms:
+                corps["position_ms"] = int(position_ms)
             titre = f" : {piste['name']} — {', '.join(a['name'] for a in piste.get('artists', []))}"
         appareils = _api("GET", "/me/player/devices", http=http).get("devices", [])
         appareil, explication = _choisir_appareil(appareils)

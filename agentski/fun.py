@@ -167,7 +167,26 @@ async def erreur(update, context: ContextTypes.DEFAULT_TYPE) -> None:
             pass
 
 
+async def commande_archives(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    with SessionLocal() as session:
+        texte = surprises.lister_archives(session)
+    for i in range(0, len(texte), 4000):
+        await update.message.reply_text(texte[i:i + 4000])
+
+
+async def commande_retirer_archive(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        numero = int(context.args[0].lstrip("#"))
+    except (IndexError, ValueError):
+        await update.message.reply_text("Format : /retirer_archive 4 (les numéros viennent de /archives)")
+        return
+    with SessionLocal() as session:
+        await update.message.reply_text(surprises.retirer_archive(session, numero))
+
+
 def installer(app) -> None:
+    app.add_handler(CommandHandler("archives", commande_archives))
+    app.add_handler(CommandHandler("retirer_archive", commande_retirer_archive))
     app.add_handler(CommandHandler("easter", commande_easter))
     app.add_handler(CommandHandler("chambre", commande_chambre))
     app.add_handler(CommandHandler("verte", commande_verte))

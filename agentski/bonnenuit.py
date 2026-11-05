@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import conversation
-from .amis import aujourdhui, definir_reglage, reglage
+from .amis import aujourdhui, definir_reglage, nom_krok, reglage
 from .horloge import maintenant, vers_paris
 from .models import Chute, Journee, Moment, Personne, Presence
 from .surprises import Evenement
@@ -47,11 +47,11 @@ def evenements(session: Session, generateur) -> list[Evenement]:
             continue
         definir_reglage(session, cle, "1")  # une seule fois, même si l'envoi échoue : pas de doublon à la minute suivante
         fiche = conversation._resume(session, p, "prive")  # message privé : la fiche privée peut servir
-        demande = (f"Prénom : {p.prenom}.\nTon humeur : {conversation.humeur(session)}.\nFaits de sa journée :\n- " + "\n- ".join(_faits(session, p, journee))
+        demande = (f"Prénom : {nom_krok(p)}.\nTon humeur : {conversation.humeur(session)}.\nFaits de sa journée :\n- " + "\n- ".join(_faits(session, p, journee))
                    + (f"\nCe que tu sais de lui ou elle :\n{fiche}" if fiche else "") + "\nÉcris le message.")
         try:
             texte = generateur(SYSTEME, demande).strip()
         except Exception:
             texte = ""
-        sortie.append(Evenement(p.telegram_id, texte or random.choice(SECOURS).format(p=p.prenom)))
+        sortie.append(Evenement(p.telegram_id, texte or random.choice(SECOURS).format(p=nom_krok(p))))
     return sortie

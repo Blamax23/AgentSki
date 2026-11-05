@@ -27,6 +27,7 @@ class Personne(Base):
     actif: Mapped[bool] = mapped_column(Boolean, default=True)
     premiere_apparition: Mapped[date | None] = mapped_column(Date)
     anniversaire: Mapped[date | None] = mapped_column(Date)  # l'année compte peu : seuls le jour et le mois servent
+    surnom: Mapped[str | None] = mapped_column(String(50))  # donné par l'organisateur seul : Krok n'appelle plus la personne autrement
 
 
 class Weekend(Base):

@@ -4,7 +4,7 @@ import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
 
-from . import acces, blagues, conversation, ia
+from . import acces, amis, blagues, conversation, horoscope, ia
 from .db import SessionLocal
 
 
@@ -32,6 +32,17 @@ async def commande_icham(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def commande_adrille_rallye(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _repondre(update, "adrille_rallye", blagues.pub_adrille_rallye())
+
+
+async def commande_horoscope(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/horoscope : le tien ; /horoscope Adrien : celui de quelqu'un d'autre (prénom ou surnom)."""
+    def calcul() -> str:
+        with SessionLocal() as session:
+            cible = amis.trouver_personne(session, " ".join(context.args)) if context.args else acces.personne_connue(session, update.effective_user.id)
+            if cible is None:
+                return "Je ne connais pas cette personne : /horoscope seul donne le tien, /horoscope Adrien celui d'un ami."
+            return horoscope.horoscope(session, cible, ia.creatif)
+    await _repondre(update, "horoscope", await asyncio.to_thread(calcul))
 
 
 async def commande_duel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -66,6 +77,6 @@ async def bouton_quicestce(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 def installer(app) -> None:
     for nom, fonction in (("preaud", commande_preaud), ("icham", commande_icham), ("adrille_rallye", commande_adrille_rallye),
-                          ("adrille", commande_adrille_rallye), ("duel", commande_duel), ("quicestce", commande_quicestce)):
+                          ("adrille", commande_adrille_rallye), ("horoscope", commande_horoscope), ("duel", commande_duel), ("quicestce", commande_quicestce)):
         app.add_handler(CommandHandler(nom, fonction))
     app.add_handler(CallbackQueryHandler(bouton_quicestce, pattern=r"^q\|"))
