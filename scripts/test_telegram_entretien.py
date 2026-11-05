@@ -27,7 +27,10 @@ from agentski.db import SessionLocal, engine, seed_personnes, sync_allowed_users
 from agentski.models import Base, ChampJournal, Journee, Personne, Presence, Transcription, Weekend  # noqa: E402
 
 Base.metadata.create_all(engine)
-VOCAL = next((RACINE / "Vocaux").glob("*.ogg"))
+# Un petit son généré par ffmpeg : le test marche sur une machine neuve, sans les vrais vocaux (qui ne sont pas dans git)
+import subprocess  # noqa: E402
+VOCAL = Path(tempfile.mkdtemp()) / "essai.ogg"
+subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=2", "-c:a", "libopus", str(VOCAL)], check=True)
 
 
 def verifie(condition, texte):
