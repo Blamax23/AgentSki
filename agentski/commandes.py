@@ -42,7 +42,7 @@ AIDE = """Voilà ce que je sais faire :
 💡 Idées et organisation
 /idee [texte] : la boîte à idées
 /suggestion [thème] : des idées trouvées sur le web
-/course [plat] : la liste de courses
+/course [plat] [précisions] : la liste de courses, un vrai plat à la fois
 /ics : les sorties dans ton agenda
 /afaire : les pistes pas encore faites
 

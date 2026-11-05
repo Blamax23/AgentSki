@@ -58,7 +58,7 @@ async def commande_course(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif context.args[0].lower() == "vider":
         await update.message.reply_text(_avec_session(plans.vider_courses))
     else:
-        await update.message.reply_text(_avec_session(plans.ajouter_plat, _moi(update), " ".join(context.args)))
+        await update.message.reply_text(await asyncio.to_thread(_avec_session, plans.course, _moi(update), " ".join(context.args), ia.economique))
 
 
 async def commande_defi(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

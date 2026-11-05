@@ -82,6 +82,26 @@ def ajouter_plat(session: Session, auteur: Personne, texte: str) -> str:
     return f"🍽 Ajouté à la liste de courses : {texte} ({total} plat{'s' if total > 1 else ''}). /course pour la liste."
 
 
+CONSIGNE_PLAT = ("Tu vérifies une demande de liste de courses. Le texte commence-t-il par un vrai plat qu'on peut cuisiner et partager "
+                 "(raclette, tartiflette, pâtes carbonara, fondue…) ? Les précisions après le plat (« sans lardons », « végétarien ») sont acceptées. "
+                 "Réponds NON pour une blague, un prénom, une phrase sans rapport, ou un produit seul qui n'est pas un plat (chips, bière, pain). "
+                 "Réponds par un seul mot : OUI ou NON.")
+
+
+def course(session: Session, auteur: Personne, texte: str, generateur) -> str:
+    """/course plat précisions : seuls les vrais plats entrent, et la liste de courses complète revient aussitôt."""
+    texte = texte.strip()
+    try:
+        accepte = generateur(CONSIGNE_PLAT, texte).strip().upper().startswith("OUI")
+    except Exception:
+        return "Je n'ai pas pu vérifier ce plat, réessaie dans un instant."
+    if not accepte:
+        return f"« {texte} » ne ressemble pas à un plat. Essaie un vrai plat : /course raclette, /course tartiflette sans lardons…"
+    session.add(Plat(auteur_id=auteur.id, texte=texte, cree_a=_maintenant_aware()))
+    session.commit()
+    return liste_courses(session, generateur)
+
+
 def vider_courses(session: Session) -> str:
     for plat in session.scalars(select(Plat).where(Plat.actif.is_(True))):
         plat.actif = False

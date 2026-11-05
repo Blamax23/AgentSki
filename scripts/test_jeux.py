@@ -17,7 +17,7 @@ if "--reel" not in sys.argv:
 os.environ["ALLOWED_USERS"] = "1:Maxime"
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlalchemy import select  # noqa: E402
+from sqlalchemy import func, select  # noqa: E402
 
 from agentski import amis, defis, horloge, jeux, plans, rappels  # noqa: E402
 from agentski.db import SessionLocal, engine, seed_personnes, sync_allowed_users  # noqa: E402
@@ -205,7 +205,8 @@ def bouton(uid, data):
 
 
 async def telegram():
-    jeux.ia.creatif = jeux.ia.economique = lambda *a, **k: "OK"
+    jeux.ia.creatif = lambda *a, **k: "OK"
+    jeux.ia.economique = lambda syst, *a, **k: ("NON" if "blague" in a[0] else "OUI") if syst == plans.CONSIGNE_PLAT else "OK"
     jeux.ia.recherche_web = lambda d, **k: ("Idée trouvée", ["https://exemple.fr/x"])
     up, ctx = maj(1)
     await jeux.commande_defi(up, ctx)
@@ -252,7 +253,12 @@ async def telegram():
 
     up, ctx = maj(1, args=["raclette", "sans", "charcuterie"])
     await jeux.commande_course(up, ctx)
-    verifie("Ajouté à la liste de courses" in up.message.reply_text.call_args[0][0], "/course plat : ajout")
+    verifie("Courses pour" in up.message.reply_text.call_args[0][0], "/course plat : la liste de courses revient directement")
+    up, ctx = maj(1, args=["blague", "nulle"])
+    await jeux.commande_course(up, ctx)
+    verifie("ne ressemble pas à un plat" in up.message.reply_text.call_args[0][0], "/course : ce qui n'est pas un plat est refusé")
+    with SessionLocal() as s:
+        verifie(s.scalar(select(func.count()).select_from(Plat).where(Plat.texte == "blague nulle")) == 0, "…et n'entre pas dans la liste")
     up, ctx = maj(1)
     await jeux.commande_course(up, ctx)
     verifie("Courses pour" in up.message.reply_text.call_args[0][0], "/course : la liste")
