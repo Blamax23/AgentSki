@@ -6,6 +6,7 @@ Lecture : PUT /me/player/play et /me/player/pause, GET /me/player/devices (Premi
 Mode développeur : le propriétaire de l'application doit avoir Spotify Premium, 5 utilisateurs au plus."""
 import base64
 import json
+import logging
 import re
 import time
 import urllib.error
@@ -20,9 +21,18 @@ from .amis import _maintenant_aware, aujourdhui, definir_reglage, journee_du_jou
 from .models import ChampJournal, Journee, Morceau, Personne, Reglage, Weekend
 from .rappels import NOMS_MOIS
 
+log = logging.getLogger("agentski")
 API = "https://api.spotify.com/v1"
 LIEN = re.compile(r"(?:open\.spotify\.com/(?:intl-[a-z]+/)?track/|spotify:track:)([A-Za-z0-9]{22})")
 _jeton: dict = {"valeur": None, "expire": 0.0}
+
+
+def _panne(e: Exception, debut: str = "Spotify ne répond pas pour l'instant") -> str:
+    """Message d'une panne qui n'est pas une réponse d'erreur de Spotify : on garde la cause dans les journaux et on en donne le type, au lieu de la cacher."""
+    log.warning("Spotify : %r", e, exc_info=True)
+    if isinstance(e, TimeoutError) or "timed out" in str(e).lower():
+        return f"{debut} (délai dépassé : l'appareil ne répond pas, appli Spotify en veille ?). Réessaie avec l'appli ouverte au premier plan."
+    return f"{debut} ({type(e).__name__}). Réessaie dans un moment."
 
 
 class SpotifyAbsent(Exception):
@@ -102,8 +112,8 @@ def proposer(texte: str, action: str, telegram_id: int, http=_http) -> tuple[str
         pistes = chercher_titres(texte, 3, http)
     except SpotifyErreur as e:
         return _erreur_lecture(e), None
-    except Exception:
-        return "Spotify ne répond pas pour l'instant : réessaie dans un moment.", None
+    except Exception as e:
+        return _panne(e), None
     if not pistes:
         return f"Je ne trouve pas « {texte} » sur Spotify.", None
     lignes = "\n".join(f"{i}. {_detail(p)}" for i, p in enumerate(pistes, 1))
@@ -164,8 +174,8 @@ def ajouter_morceau(session: Session, auteur: Personne, texte: str, http=_http) 
         _api("POST", f"/playlists/{playlist}/items", {"uris": [piste["uri"]]}, http)
     except SpotifyAbsent:
         return "Spotify n'est pas configuré."
-    except Exception:
-        return "Spotify ne répond pas pour l'instant : le morceau n'est pas ajouté, réessaie dans un moment."
+    except Exception as e:
+        return _panne(e, "Spotify ne répond pas pour l'instant : le morceau n'est pas ajouté")
     artistes = ", ".join(a["name"] for a in piste.get("artists", []))
     journee = session.scalar(select(Journee).where(Journee.jour == aujourdhui()))  # rattaché à la journée du jour seulement si elle existe
     session.add(Morceau(weekend_id=journee.weekend_id if journee else None, journee_id=journee.id if journee else None, personne_id=auteur.id,
@@ -268,8 +278,8 @@ def lancer_musique(auteur_texte: str, http=_http, position_ms: int | None = None
         return "Spotify n'est pas configuré."
     except SpotifyErreur as e:
         return _erreur_lecture(e)
-    except Exception:
-        return "Spotify ne répond pas pour l'instant : réessaie dans un moment."
+    except Exception as e:
+        return _panne(e)
     return f"▶️ Lecture sur {appareil['name']}{titre}"
 
 
@@ -280,8 +290,8 @@ def mettre_en_pause(http=_http) -> str:
         _api("PUT", "/me/player/pause", http=http)
     except SpotifyErreur as e:
         return _erreur_lecture(e) if e.code != 404 else "Rien n'est en cours de lecture sur un appareil Spotify actif."
-    except Exception:
-        return "Spotify ne répond pas pour l'instant : réessaie dans un moment."
+    except Exception as e:
+        return _panne(e)
     return "⏸ Musique en pause."
 
 
@@ -308,6 +318,6 @@ def mettre_en_file(texte: str, http=_http) -> str:
         return "Spotify n'est pas configuré."
     except SpotifyErreur as e:
         return _erreur_lecture(e)
-    except Exception:
-        return "Spotify ne répond pas pour l'instant : réessaie dans un moment."
+    except Exception as e:
+        return _panne(e)
     return f"➕ Ajouté à la file d'attente sur {appareil['name']} : {_detail(piste)}"

@@ -249,6 +249,17 @@ rep = spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tK
 verifie("Spotify indique : rien n'est chargé" in rep, "l'échec dit ce que Spotify rapporte")
 verifie("ne lance pas le morceau" in rep and "Lecture sur" not in rep, "l'appareil n'obéit jamais : message honnête, pas de faux « Lecture sur… »")
 etat["sourd"] = 0
+def http_delai(methode, url, entetes, corps=None):
+    if methode == "PUT" and "/me/player/play" in url:
+        raise TimeoutError("timed out")
+    return http_lecture(methode, url, entetes, corps)
+rep = spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http_delai)
+verifie("délai dépassé" in rep and "appli Spotify en veille" in rep, "délai dépassé : la cause est dite au lieu d'un message vague")
+def http_bug(methode, url, entetes, corps=None):
+    if methode == "PUT" and "/me/player/play" in url:
+        raise ValueError("réponse illisible")
+    return http_lecture(methode, url, entetes, corps)
+verifie("(ValueError)" in spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http_bug), "autre panne : le type d'erreur est donné")
 appels.clear()
 verifie("Lecture sur iPhone de Maxime" in spotify.lancer_musique("", http_lecture) and [c for c in appels if c[0] == "PUT"][-1][2] == b"", "/play sans titre : reprend la lecture, corps vide mais présent")
 appels.clear()
