@@ -208,6 +208,7 @@ with SessionLocal() as s:
 appels = []
 etat = {"appareils": [], "erreur": None, "joue": None, "sourd": 0}  # sourd : nombre d'ordres de lecture que l'appareil ignore
 spotify.DELAI_VERIF = 0
+spotify.ESSAIS_VERIF = 2
 def http_lecture(methode, url, entetes, corps=None):
     appels.append((methode, url, corps))
     if methode == "PUT" and "/me/player/play" in url and corps and b"uris" in corps:
@@ -245,6 +246,7 @@ verifie("Lecture sur iPhone" in rep and any(c[0] == "PUT" and c[1].endswith("/me
         and len([c for c in appels if c[0] == "PUT" and "/me/player/play" in c[1]]) == 2, "l'appareil ignore l'ordre : transfert avec lecture, puis nouvel essai qui réussit")
 etat["sourd"] = 5
 rep = spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http_lecture)
+verifie("Spotify indique : rien n'est chargé" in rep, "l'échec dit ce que Spotify rapporte")
 verifie("ne lance pas le morceau" in rep and "Lecture sur" not in rep, "l'appareil n'obéit jamais : message honnête, pas de faux « Lecture sur… »")
 etat["sourd"] = 0
 appels.clear()

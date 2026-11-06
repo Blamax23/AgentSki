@@ -22,6 +22,7 @@ from agentski.models import Archive, Base, Morceau, Personne, Replique  # noqa: 
 
 config.SPOTIFY_CLIENT_ID, config.SPOTIFY_CLIENT_SECRET, config.SPOTIFY_REFRESH_TOKEN = "id", "secret", "refresh"
 spotify.DELAI_VERIF = 0
+spotify.ESSAIS_VERIF = 2
 Base.metadata.create_all(engine)
 with SessionLocal() as s:
     seed_personnes(s)
