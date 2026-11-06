@@ -156,7 +156,7 @@ with SessionLocal() as s:
     lecture = next(c for c in journal if "/tracks/4uLU6hMCjMI75M1A2tKUQC" in c[1])
     verifie(lecture[2]["Authorization"] == "Bearer AT" and not any("/search" in c[1] for c in journal), "ajout par lien : lecture exacte du morceau, aucune recherche au hasard")
     creation = next(c for c in journal if c[1].endswith("/me/playlists"))
-    verifie(json.loads(creation[3])["public"] is False and json.loads(creation[3])["name"] == "Chronique ski — week-end annuel", "une seule playlist, demandée en privé, nommée « week-end annuel »")
+    verifie(json.loads(creation[3])["public"] is False and json.loads(creation[3])["name"] == config.PLAYLIST_NOM, "une seule playlist, demandée en privé, au nom configuré")
     ajout = next(c for c in journal if c[1].endswith("/playlists/PL1/items"))
     verifie(ajout[0] == "POST" and json.loads(ajout[3]) == {"uris": ["spotify:track:4uLU6hMCjMI75M1A2tKUQC"]}, "ajout par POST /playlists/{id}/items avec l'URI")
     verifie(s.scalar(select(ChampJournal).where(ChampJournal.cle == "morceau")).valeur == "Get Lucky — Daft Punk", "le morceau est noté au journal")
