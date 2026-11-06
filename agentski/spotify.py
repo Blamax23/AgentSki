@@ -254,7 +254,10 @@ def lancer_musique(auteur_texte: str, http=_http, position_ms: int | None = None
             piste = lire_morceau(track_id, http) if track_id else None
             if piste is None:
                 return f"Je ne trouve pas « {texte} » sur Spotify." if track_id else "Il me faut un lien Spotify : pour chercher un titre, utilise /play titre."
-            corps = {"uris": [piste["uri"]]}
+            # Sur iPhone, un ordre « uris » est accepté (204) mais ignoré : l'appli perd sa session sans rien lancer. Avec l'album en contexte
+            # et le morceau en point de départ (offset), l'iPhone joue. La suite de l'album suit ensuite le morceau choisi.
+            album = (piste.get("album") or {}).get("uri")
+            corps = {"context_uri": album, "offset": {"uri": piste["uri"]}} if album else {"uris": [piste["uri"]]}
             if position_ms:
                 corps["position_ms"] = int(position_ms)
             titre = f" : {piste['name']} — {', '.join(a['name'] for a in piste.get('artists', []))}"
@@ -289,7 +292,9 @@ def mettre_en_pause(http=_http) -> str:
     try:
         _api("PUT", "/me/player/pause", http=http)
     except SpotifyErreur as e:
-        return _erreur_lecture(e) if e.code != 404 else "Rien n'est en cours de lecture sur un appareil Spotify actif."
+        if e.code == 404 or (e.code == 403 and "Restriction violated" in str(e)):  # rien ne joue, ou déjà en pause : ce n'est pas un problème d'autorisation
+            return "Rien n'est en cours de lecture sur un appareil Spotify actif."
+        return _erreur_lecture(e)
     except Exception as e:
         return _panne(e)
     return "⏸ Musique en pause."

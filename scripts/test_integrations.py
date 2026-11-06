@@ -211,12 +211,13 @@ spotify.DELAI_VERIF = 0
 spotify.ESSAIS_VERIF = 2
 def http_lecture(methode, url, entetes, corps=None):
     appels.append((methode, url, corps))
-    if methode == "PUT" and "/me/player/play" in url and corps and b"uris" in corps:
+    if methode == "PUT" and "/me/player/play" in url and corps and (b"uris" in corps or b"offset" in corps):
         if etat["sourd"] > 0:
             etat["sourd"] -= 1  # l'ancien morceau est arrêté, le nouveau ne démarre pas
             etat["joue"] = None
         else:
-            etat["joue"] = json.loads(corps)["uris"][0].rsplit(":", 1)[1]
+            lu = json.loads(corps)
+            etat["joue"] = (lu["offset"]["uri"] if "offset" in lu else lu["uris"][0]).rsplit(":", 1)[1]
     if methode == "GET" and url.endswith("/me/player"):
         return {"is_playing": True, "item": {"id": etat["joue"]}} if etat["joue"] else {}
     if "accounts.spotify.com" in url:
@@ -228,7 +229,8 @@ def http_lecture(methode, url, entetes, corps=None):
     if url.endswith("/me/player/devices"):
         return {"devices": etat["appareils"]}
     if "/tracks/" in url:
-        return {"id": url.rsplit("/", 1)[1], "uri": "spotify:track:" + url.rsplit("/", 1)[1], "name": "Get Lucky", "artists": [{"name": "Daft Punk"}]}
+        album = {"album": {"uri": "spotify:album:ALB1"}} if etat.get("avec_album") else {}
+        return {"id": url.rsplit("/", 1)[1], "uri": "spotify:track:" + url.rsplit("/", 1)[1], "name": "Get Lucky", "artists": [{"name": "Daft Punk"}], **album}
     return {}
 
 spotify._jeton.update(valeur=None, expire=0.0)
@@ -239,6 +241,18 @@ rep = spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tK
 play = [c for c in appels if c[0] == "PUT"][-1]
 verifie("Lecture sur iPhone de Maxime : Get Lucky — Daft Punk" in rep, "/play titre : lancé sur l'appareil actif")
 verifie(play[1] == spotify.API + "/me/player/play" and json.loads(play[2]) == {"uris": ["spotify:track:4uLU6hMCjMI75M1A2tKUQC"]}, "…par PUT /me/player/play avec l'URI, sans device_id : l'appareil actif est utilisé")
+etat["avec_album"] = True
+appels.clear()
+rep = spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http_lecture, 90_000)
+corps_play = json.loads([c for c in appels if c[0] == "PUT" and "/me/player/play" in c[1]][-1][2])
+verifie("Lecture sur" in rep and corps_play == {"context_uri": "spotify:album:ALB1", "offset": {"uri": "spotify:track:4uLU6hMCjMI75M1A2tKUQC"}, "position_ms": 90000},
+        "lecture avec l'album en contexte et le morceau en point de départ : c'est ce que l'iPhone accepte (et non « uris »)")
+def http_deja_en_pause(methode, url, entetes, corps=None):
+    if methode == "PUT" and url.endswith("/me/player/pause"):
+        raise spotify.SpotifyErreur(403, '{"error": {"message": "Player command failed: Restriction violated"}}')
+    return http_lecture(methode, url, entetes, corps)
+verifie("Rien n'est en cours de lecture" in spotify.mettre_en_pause(http_deja_en_pause), "pause quand rien ne joue : pas de faux message d'autorisation")
+etat["avec_album"] = False
 etat["sourd"] = 1
 appels.clear()
 rep = spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http_lecture)
