@@ -254,7 +254,7 @@ MENU = [("moment", "Poser un marqueur dans la journée"), ("chute", "Noter une c
         ("capsule", "Remplir ta capsule temporelle"), ("stats", "Tes statistiques (ou « tous »)"), ("chrono", "Noter un chrono sur une piste"),
         ("fils", "Paris et défis en cours"), ("talk", "Discuter avec Krok"), ("oublie", "Effacer ce que Krok sait de toi"), ("achille", "Un mode… particulier"), ("krok", "Revenir à la normale"), ("duel", "Un duel entre deux personnes"), ("quicestce", "Qui a dit cette phrase ?"), ("blindtest", "Un blind test sur la playlist"), ("horoscope", "L'horoscope du jour"), ("icham", "À essayer pour voir"), ("preaud", "Un classement très officiel"), ("adrille_rallye", "Tu verras bien"), ("trophees", "Tes trophées débloqués"), ("position", "Partager ta position en direct"), ("ou", "Où est quelqu'un"), ("rdv", "Un point de rendez-vous"), ("afaire", "Pistes pas encore faites"), ("gopro", "À qui le tour de filmer"),
         ("confessionnal", "Le plan du confessionnal"), ("medias", "Renvoyer les médias gardés"), ("kit", "Exporter ce qui a été vécu"), ("vues", "Chiffres des épisodes"), ("aide", "Ce que je sais faire")]
-# Cachées, volontairement absentes du menu : /surnom, /archives, /retirer_archive, /verte, /raclette et 🧀, /groupe, /revelation, /resolu, /resultat, /verdict, /imitation, /retirer
+# Cachées, volontairement absentes du menu : /surnom, /reset_playlist, /archives, /retirer_archive, /verte, /raclette et 🧀, /groupe, /revelation, /resolu, /resultat, /verdict, /imitation, /retirer
 
 
 async def declarer_menu(app) -> None:

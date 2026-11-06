@@ -297,6 +297,23 @@ def _tally(session: Session, defi: Defi, reponse_vue: bool = False) -> str:
     return ""
 
 
+TYPES_NOTES_PAR_LES_AUTRES = ("phrase", "gage", "proces", "chef", "dj")
+
+
+def raison_du_refus(session: Session, defi_id: int, votant: Personne) -> str:
+    """Pourquoi un vote est refusé, en une phrase claire (le bouton ne dit pas pourquoi : on ne devine pas, on explique)."""
+    defi = session.get(Defi, defi_id)
+    if defi is None:
+        return "Ce défi n'existe plus."
+    if defi.type == "imitation":
+        return "L'imitation ne se vote pas : imite ta cible pendant le repas, les autres devineront."
+    if defi.etat != "en_cours":
+        return "Ce défi est terminé."
+    if defi.type in TYPES_NOTES_PAR_LES_AUTRES and defi.tire_id == votant.id:
+        return "C'est toi le concerné : fais le défi, ce sont les autres qui valident (on ne note pas son propre défi)."
+    return "Ce vote n'est pas possible."
+
+
 def voter(session: Session, defi_id: int, votant: Personne, valeur: str) -> Message | None:
     """Enregistre un vote ou révèle la réponse d'un quiz. Renvoie le message mis à jour, ou None si le vote est refusé."""
     defi = session.get(Defi, defi_id)
@@ -312,7 +329,7 @@ def voter(session: Session, defi_id: int, votant: Personne, valeur: str) -> Mess
     if defi.type == "quiz" and valeur == "r":
         return Message(_base(defi) + _tally(session, defi, True),
                        [[("🙋 J'avais bon", f"d|{defi.id}|1")]])
-    if defi.type in ("phrase", "gage", "proces", "chef", "dj") and defi.tire_id == votant.id:
+    if defi.type in TYPES_NOTES_PAR_LES_AUTRES and defi.tire_id == votant.id:
         return None  # on ne note pas son propre défi
     vote = session.scalar(select(DefiVote).where(DefiVote.defi_id == defi.id, DefiVote.personne_id == votant.id))
     if vote is None:

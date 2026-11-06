@@ -8,7 +8,7 @@ from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes, Mes
 from . import acces, agenda, config, spotify
 from .amis import definir_reglage
 from .db import SessionLocal
-from .models import Personne
+from .models import Morceau, Personne
 from sqlalchemy import select
 
 
@@ -79,6 +79,27 @@ async def lien_spotify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(reponse)
 
 
+async def commande_reset_playlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    with SessionLocal() as session:
+        nb = len(session.scalars(select(Morceau.id)).all())
+    await update.message.reply_text(
+        f"Playlist « {config.PLAYLIST_NOM} » : {nb} morceau{'x' if nb > 1 else ''} connu{'s' if nb > 1 else ''} du bot. Réinitialiser lui fait tout oublier "
+        "(morceaux, blind test, doublons) et le prochain /son créera une nouvelle playlist. Rien n'est supprimé sur Spotify.",
+        reply_markup=_clavier([[("🧹 Réinitialiser", "pl|oui"), ("Annuler", "pl|non")]]))
+
+
+async def bouton_reset_playlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    with SessionLocal() as session:
+        personne = acces.personne_connue(session, update.effective_user.id)
+        if personne is None or personne.prenom != config.ORGANISATEUR:
+            await query.answer("Réservé à l'organisateur.", show_alert=True)
+            return
+        texte = spotify.reinitialiser(session) if query.data == "pl|oui" else "Annulé, rien n'a changé."
+    await query.answer()
+    await query.edit_message_text(texte)
+
+
 async def commande_ics(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     with SessionLocal() as session:
         contenu = agenda.exporter_ics(session)
@@ -110,5 +131,7 @@ def installer(app) -> None:
     app.add_handler(CommandHandler("file", commande_file))
     app.add_handler(CommandHandler("pause", commande_pause))
     app.add_handler(CommandHandler("ics", commande_ics))
+    app.add_handler(CommandHandler("reset_playlist", commande_reset_playlist))
+    app.add_handler(CallbackQueryHandler(bouton_reset_playlist, pattern=r"^pl\|"))
     app.add_handler(CallbackQueryHandler(bouton_alix, pattern=r"^al\|"))
     app.add_handler(MessageHandler(filters.Regex(spotify.LIEN) & ~filters.COMMAND, lien_spotify))

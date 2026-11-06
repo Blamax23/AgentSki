@@ -138,6 +138,8 @@ with SessionLocal() as s:
     tire = s.get(Personne, chef.tire_id)
     autre = adr if tire.id != adr.id else achille
     verifie(defis.voter(s, defi_id, tire, "8") is None, "on ne note pas son propre défi")
+    verifie("C'est toi le concerné" in defis.raison_du_refus(s, defi_id, tire) and "autres qui valident" in defis.raison_du_refus(s, defi_id, tire), "refus : le concerné sait pourquoi")
+    verifie("n'existe plus" in defis.raison_du_refus(s, 99999, tire), "refus : défi inconnu")
     m = defis.voter(s, defi_id, autre, "8")
     verifie("8.0/10 (1 note)" in m.texte, "note enregistrée, moyenne affichée")
     defis.voter(s, defi_id, autre, "6")

@@ -12,12 +12,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from . import config
 from .amis import _maintenant_aware, aujourdhui, definir_reglage, journee_du_jour, reglage
-from .models import ChampJournal, Journee, Morceau, Personne, Weekend
+from .models import ChampJournal, Journee, Morceau, Personne, Reglage, Weekend
 from .rappels import NOMS_MOIS
 
 API = "https://api.spotify.com/v1"
@@ -129,6 +129,18 @@ def playlist_annuelle(session: Session, http=_http) -> str:
     r = _api("POST", "/me/playlists", {"name": config.PLAYLIST_NOM, "public": False, "description": "La bande-son du week-end annuel : tout le monde y ajoute ses morceaux"}, http)
     definir_reglage(session, "playlist_annuelle", r["id"])
     return r["id"]
+
+
+def reinitialiser(session: Session) -> str:
+    """Le bot oublie la playlist et ses morceaux : le prochain /son crée une nouvelle playlist. Rien n'est modifié sur Spotify."""
+    nb = session.scalar(select(func.count()).select_from(Morceau)) or 0
+    ligne = session.get(Reglage, "playlist_annuelle")
+    if ligne is not None:
+        session.delete(ligne)
+    session.execute(delete(Morceau))
+    session.commit()
+    return (f"🧹 Playlist réinitialisée : {nb} morceau{'x' if nb > 1 else ''} oublié{'s' if nb > 1 else ''}. "
+            f"Le prochain /son créera une nouvelle playlist « {config.PLAYLIST_NOM} » sur ton Spotify (l'ancienne n'est pas touchée).")
 
 
 def ajouter_morceau(session: Session, auteur: Personne, texte: str, http=_http) -> str:

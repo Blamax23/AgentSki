@@ -38,7 +38,7 @@ REGLES: dict[str, Regle] = {
     "moment": SKI, "chute": SKI, "chrono": SKI, "ou": SKI, "rdv": SKI, "gopro": SKI, "citation": SKI,
     # Ce qui engage l'organisateur seul
     "groupe": Regle(qui="organisateur"), "medias": Regle(lieu="prive", qui="organisateur"), "confessionnal": Regle(lieu="prive", quand="ski", qui="organisateur"), "revelation": Regle(qui="organisateur"),
-    "surnom": Regle(lieu="prive", qui="organisateur"),
+    "surnom": Regle(lieu="prive", qui="organisateur"), "reset_playlist": Regle(lieu="prive", qui="organisateur"),
     "archives": Regle(lieu="prive", qui="organisateur"), "retirer_archive": Regle(lieu="prive", qui="organisateur"),
 }
 

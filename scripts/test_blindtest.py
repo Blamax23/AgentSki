@@ -150,3 +150,12 @@ with SessionLocal() as s:
     verifie("Pas d'archive" in surprises.retirer_archive(s, 999), "/retirer_archive : numéro inconnu")
     verifie(all(regles.REGLES[c].qui == "organisateur" and regles.REGLES[c].lieu == "prive" for c in ("archives", "retirer_archive")), "archives : organisateur seul, en privé")
     verifie(regles.REGLES["blindtest"].lieu == "groupe", "/blindtest : dans le groupe seulement")
+
+    # --- Réinitialisation de la playlist --------------------------------------------------------------------
+    from agentski.amis import definir_reglage, reglage
+    definir_reglage(s, "playlist_annuelle", "ANCIENNE")
+    avant = len(blindtest.morceaux_disponibles(s))
+    texte = spotify.reinitialiser(s)
+    verifie(avant > 0 and f"{avant} morceaux oubliés" in texte and reglage(s, "playlist_annuelle") is None and not blindtest.morceaux_disponibles(s), "playlist réinitialisée : id et morceaux oubliés")
+    verifie("0 morceau oublié" in spotify.reinitialiser(s), "réinitialiser deux fois ne casse rien")
+    verifie(regles.REGLES["reset_playlist"].qui == "organisateur" and regles.REGLES["reset_playlist"].lieu == "prive", "/reset_playlist : organisateur seul, en privé")

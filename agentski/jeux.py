@@ -94,9 +94,11 @@ async def bouton_vote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     query = update.callback_query
     _, defi_id, valeur = query.data.split("|")
     with SessionLocal() as session:
-        message = defis.voter(session, int(defi_id), acces.personne_connue(session, update.effective_user.id), valeur)
+        votant = acces.personne_connue(session, update.effective_user.id)
+        message = defis.voter(session, int(defi_id), votant, valeur)
+        raison = defis.raison_du_refus(session, int(defi_id), votant) if message is None else ""
     if message is None:
-        await query.answer("Ce vote n'est pas possible (c'est ton défi, ou il est terminé).", show_alert=True)
+        await query.answer(raison, show_alert=True)
         return
     await query.answer()
     await query.edit_message_text(message.texte, reply_markup=_clavier(message.boutons))
