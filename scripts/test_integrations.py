@@ -206,9 +206,18 @@ with SessionLocal() as s:
 
 # --- Lecture : /play et /pause ------------------------------------------------------------------------------------
 appels = []
-etat = {"appareils": [], "erreur": None}
+etat = {"appareils": [], "erreur": None, "joue": None, "sourd": 0}  # sourd : nombre d'ordres de lecture que l'appareil ignore
+spotify.DELAI_VERIF = 0
 def http_lecture(methode, url, entetes, corps=None):
     appels.append((methode, url, corps))
+    if methode == "PUT" and "/me/player/play" in url and corps and b"uris" in corps:
+        if etat["sourd"] > 0:
+            etat["sourd"] -= 1  # l'ancien morceau est arrêté, le nouveau ne démarre pas
+            etat["joue"] = None
+        else:
+            etat["joue"] = json.loads(corps)["uris"][0].rsplit(":", 1)[1]
+    if methode == "GET" and url.endswith("/me/player"):
+        return {"is_playing": True, "item": {"id": etat["joue"]}} if etat["joue"] else {}
     if "accounts.spotify.com" in url:
         return {"access_token": "AT2", "expires_in": 3600}
     if etat["erreur"] and "/me/player/" in url and methode == "PUT":
@@ -229,6 +238,15 @@ rep = spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tK
 play = [c for c in appels if c[0] == "PUT"][-1]
 verifie("Lecture sur iPhone de Maxime : Get Lucky — Daft Punk" in rep, "/play titre : lancé sur l'appareil actif")
 verifie(play[1] == spotify.API + "/me/player/play" and json.loads(play[2]) == {"uris": ["spotify:track:4uLU6hMCjMI75M1A2tKUQC"]}, "…par PUT /me/player/play avec l'URI, sans device_id : l'appareil actif est utilisé")
+etat["sourd"] = 1
+appels.clear()
+rep = spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http_lecture)
+verifie("Lecture sur iPhone" in rep and any(c[0] == "PUT" and c[1].endswith("/me/player") and json.loads(c[2])["play"] is True for c in appels)
+        and len([c for c in appels if c[0] == "PUT" and "/me/player/play" in c[1]]) == 2, "l'appareil ignore l'ordre : transfert avec lecture, puis nouvel essai qui réussit")
+etat["sourd"] = 5
+rep = spotify.lancer_musique("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", http_lecture)
+verifie("ne lance pas le morceau" in rep and "Lecture sur" not in rep, "l'appareil n'obéit jamais : message honnête, pas de faux « Lecture sur… »")
+etat["sourd"] = 0
 appels.clear()
 verifie("Lecture sur iPhone de Maxime" in spotify.lancer_musique("", http_lecture) and [c for c in appels if c[0] == "PUT"][-1][2] == b"", "/play sans titre : reprend la lecture, corps vide mais présent")
 appels.clear()

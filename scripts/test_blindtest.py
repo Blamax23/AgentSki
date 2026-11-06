@@ -21,6 +21,7 @@ from agentski.db import SessionLocal, engine, seed_personnes, sync_allowed_users
 from agentski.models import Archive, Base, Morceau, Personne, Replique  # noqa: E402
 
 config.SPOTIFY_CLIENT_ID, config.SPOTIFY_CLIENT_SECRET, config.SPOTIFY_REFRESH_TOKEN = "id", "secret", "refresh"
+spotify.DELAI_VERIF = 0
 Base.metadata.create_all(engine)
 with SessionLocal() as s:
     seed_personnes(s)
@@ -59,6 +60,8 @@ with SessionLocal() as s:
             return {"access_token": "jeton", "expires_in": 3600}
         if "/me/player/devices" in url:
             return {"devices": [{"id": "d1", "name": "Téléphone", "is_active": True}]}
+        if methode == "GET" and url.endswith("/me/player"):
+            return {"is_playing": True, "item": {"id": json.loads(appels[-2][2])["uris"][0].rsplit(":", 1)[1]}}
         if "/tracks/" in url:
             return {"id": url.rsplit("/", 1)[1], "uri": "spotify:track:" + url.rsplit("/", 1)[1], "name": "x", "artists": [], "duration_ms": 200_000}
         return {}

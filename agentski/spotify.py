@@ -205,7 +205,20 @@ def _choisir_appareil(appareils: list[dict]) -> tuple[dict | None, str]:
     return None, f"Plusieurs appareils Spotify ({noms}) mais aucun n'est actif : lance un morceau sur celui que tu veux, puis réessaie."
 
 
-def lancer_musique(auteur_texte: str, http=_http, position_ms: int | None = None) -> str:
+DELAI_VERIF = 1.2  # secondes laissées à l'appareil pour démarrer avant de vérifier ce qui joue
+
+
+def _joue_bien(track_id: str, http, attendre) -> bool:
+    """Le morceau demandé est-il vraiment en cours de lecture ? Spotify répond 204 dès qu'il a reçu l'ordre, même si l'appareil n'obéit pas."""
+    attendre(DELAI_VERIF)
+    try:
+        etat = _api("GET", "/me/player", http=http)
+    except Exception:
+        return True  # impossible de vérifier : on ne prétend pas le contraire
+    return bool(etat) and etat.get("is_playing") is True and (etat.get("item") or {}).get("id") == track_id
+
+
+def lancer_musique(auteur_texte: str, http=_http, position_ms: int | None = None, attendre=time.sleep) -> str:
     """/play [titre ou lien] : lance le morceau sur l'appareil Spotify actif ; sans argument, reprend la lecture.
     Le son sort de l'appareil où Spotify est ouvert, jamais de Telegram ni du serveur."""
     if not configure():
@@ -228,6 +241,15 @@ def lancer_musique(auteur_texte: str, http=_http, position_ms: int | None = None
             return explication
         chemin = "/me/player/play" + ("" if appareil.get("is_active") else f"?device_id={urllib.parse.quote(appareil['id'])}")
         _api("PUT", chemin, corps, http)
+        if corps is not None and not _joue_bien(piste["id"], http, attendre):
+            # l'appareil a arrêté l'ancien morceau sans démarrer le nouveau (appli en veille, souvent sur téléphone) :
+            # on lui rend la main d'abord (transfert avec lecture), puis on relance le morceau sur cet appareil
+            _api("PUT", "/me/player", {"device_ids": [appareil["id"]], "play": True}, http)
+            attendre(DELAI_VERIF)
+            _api("PUT", f"/me/player/play?device_id={urllib.parse.quote(appareil['id'])}", corps, http)
+            if not _joue_bien(piste["id"], http, attendre):
+                return (f"⚠️ Spotify a reçu l'ordre mais « {appareil['name']} » ne lance pas le morceau. Ouvre l'appli Spotify sur cet appareil "
+                        "(écran allumé), lance un morceau à la main une seconde, puis refais /play.")
     except SpotifyAbsent:
         return "Spotify n'est pas configuré."
     except SpotifyErreur as e:
