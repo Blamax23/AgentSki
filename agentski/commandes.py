@@ -29,6 +29,7 @@ AIDE = """Voilà ce que je sais faire :
 /play [titre] : lancer sur l'appareil Spotify actif
 /file [titre] : mettre en file d'attente
 /pause : mettre en pause
+/jam [lien] : le Jam Spotify du groupe (l'hôte colle son lien, tout le monde le reçoit)
 
 🎲 Jeux et défis
 /defi : lancer un défi

@@ -163,3 +163,20 @@ with SessionLocal() as s:
     verifie(avant > 0 and f"{avant} morceaux oubliés" in texte and reglage(s, "playlist_annuelle") is None and not blindtest.morceaux_disponibles(s), "playlist réinitialisée : id et morceaux oubliés")
     verifie("0 morceau oublié" in spotify.reinitialiser(s), "réinitialiser deux fois ne casse rien")
     verifie(regles.REGLES["reset_playlist"].qui == "organisateur" and regles.REGLES["reset_playlist"].lieu == "prive", "/reset_playlist : organisateur seul, en privé")
+
+    # --- Jam Spotify ------------------------------------------------------------------------------------------
+    from agentski import jam
+    verifie(jam.extraire_lien("voilà https://open.spotify.com/socialsession/AbC123?si=x, rejoignez") == "https://open.spotify.com/socialsession/AbC123?si=x", "jam : le lien est extrait du message")
+    verifie(jam.extraire_lien("https://spotify.link/xyz") and jam.extraire_lien("https://exemple.fr/jam") is None and jam.extraire_lien("") is None, "jam : seuls les liens Spotify sont acceptés")
+    verifie("Aucun Jam en cours" in jam.texte_jam(s) and "/jam" in jam.texte_jam(s), "jam : sans Jam, on explique comment en lancer un")
+    jam.definir(s, adrien, "https://open.spotify.com/socialsession/AbC123")
+    t = jam.texte_jam(s, annonce=True)
+    verifie("lance un Jam" in t and "socialsession/AbC123" in t and "Premium" in t and jam.hote_id(s) == adrien.id, "jam : annonce avec lien, hôte et condition Premium")
+    verifie("Jam en cours, lancé par" in jam.texte_jam(s) and "12 h" not in jam.texte_jam(s), "jam : /jam seul rappelle le lien")
+    import json as _json
+    from datetime import timedelta as _td
+    from agentski.models import Reglage as _R
+    ligne = s.get(_R, "jam"); donnees = _json.loads(ligne.valeur)
+    donnees["depuis"] = (amis._maintenant_aware() - _td(hours=13)).isoformat(); ligne.valeur = _json.dumps(donnees); s.commit()
+    verifie("peut-être terminé" in jam.texte_jam(s), "jam : un lien de plus de 12 h est signalé comme peut-être mort")
+    verifie(jam.terminer(s) and not jam.terminer(s) and "Aucun Jam" in jam.texte_jam(s), "jam : /jam fin")

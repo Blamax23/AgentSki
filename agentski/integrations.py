@@ -5,7 +5,7 @@ import io
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
-from . import acces, agenda, config, spotify
+from . import acces, agenda, amis, config, jam, spotify
 from .amis import definir_reglage
 from .db import SessionLocal
 from .models import Morceau, Personne
@@ -79,6 +79,40 @@ async def lien_spotify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(reponse)
 
 
+async def commande_jam(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/jam : le Jam en cours ; /jam lien : l'hôte le partage à tout le monde ; /jam fin : le Jam est terminé."""
+    texte_args = " ".join(context.args).strip()
+    envois: list[tuple[int, str]] = []  # (conversation, message) à envoyer aux autres une fois le Jam enregistré
+    with SessionLocal() as session:
+        personne = acces.personne_connue(session, update.effective_user.id)
+        if not texte_args:
+            reponse = jam.texte_jam(session)
+        elif texte_args.lower() in ("fin", "stop", "termine", "terminé"):
+            if jam.hote_id(session) not in (None, personne.id) and personne.prenom != config.ORGANISATEUR:
+                reponse = "Seul l'hôte du Jam (ou l'organisateur) peut le déclarer terminé."
+            else:
+                reponse = "🏁 Jam terminé, merci à tous." if jam.terminer(session) else "Aucun Jam en cours."
+        else:
+            lien = jam.extraire_lien(texte_args)
+            if lien is None:
+                reponse = "Colle le lien d'invitation du Jam (open.spotify.com/… ou spotify.link/…) : /jam lien"
+            else:
+                jam.definir(session, personne, lien)
+                annonce = jam.texte_jam(session, annonce=True)
+                groupe = amis.groupe_id(session)
+                cibles = {groupe} if groupe else set()
+                cibles |= {p.telegram_id for p in session.scalars(select(Personne).where(Personne.telegram_id.is_not(None))) if p.id != personne.id}
+                cibles.discard(update.effective_chat.id)  # la personne qui tape la commande reçoit déjà la réponse ici
+                envois = [(c, annonce) for c in cibles]
+                reponse = "✅ Jam partagé avec tout le monde."
+    for conversation, message in envois:
+        try:
+            await context.bot.send_message(conversation, message)
+        except Exception:
+            pass  # quelqu'un qui n'a jamais écrit au bot ne peut pas recevoir de message privé
+    await update.message.reply_text(reponse)
+
+
 async def commande_reset_playlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     with SessionLocal() as session:
         nb = len(session.scalars(select(Morceau.id)).all())
@@ -131,6 +165,7 @@ def installer(app) -> None:
     app.add_handler(CommandHandler("file", commande_file))
     app.add_handler(CommandHandler("pause", commande_pause))
     app.add_handler(CommandHandler("ics", commande_ics))
+    app.add_handler(CommandHandler("jam", commande_jam))
     app.add_handler(CommandHandler("reset_playlist", commande_reset_playlist))
     app.add_handler(CallbackQueryHandler(bouton_reset_playlist, pattern=r"^pl\|"))
     app.add_handler(CallbackQueryHandler(bouton_alix, pattern=r"^al\|"))

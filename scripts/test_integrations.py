@@ -391,6 +391,22 @@ async def telegram():
         ctx = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
         await integrations.bouton_morceau(SimpleNamespace(callback_query=q, effective_user=SimpleNamespace(id=1)), ctx)
         verifie(ctx.bot.send_message.call_args[0][1].startswith(attendu), f"choix « {action} » : l'action part avec le morceau choisi")
+    # /jam : l'hôte colle son lien, les autres le reçoivent
+    ctx = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()), args=["https://open.spotify.com/socialsession/ZZ9"])
+    up = SimpleNamespace(message=SimpleNamespace(text=None, reply_text=AsyncMock()), effective_user=SimpleNamespace(id=1), effective_chat=SimpleNamespace(id=1))
+    await integrations.commande_jam(up, ctx)
+    destinataires = {c.args[0] for c in ctx.bot.send_message.call_args_list}
+    verifie("Jam partagé" in up.message.reply_text.call_args[0][0] and ctx.bot.send_message.await_count >= 1 and 1 not in destinataires
+            and all("socialsession/ZZ9" in c.args[1] for c in ctx.bot.send_message.call_args_list), "/jam lien : partagé aux autres, pas renvoyé à l'hôte")
+    ctx = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()), args=[])
+    await integrations.commande_jam(up, ctx)
+    verifie("socialsession/ZZ9" in up.message.reply_text.call_args[0][0] and ctx.bot.send_message.await_count == 0, "/jam seul : rappelle le lien, sans rien envoyer aux autres")
+    ctx = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()), args=["pas", "un", "lien"])
+    await integrations.commande_jam(up, ctx)
+    verifie("Colle le lien" in up.message.reply_text.call_args[0][0], "/jam sans lien valide : on explique")
+    ctx = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()), args=["fin"])
+    await integrations.commande_jam(up, ctx)
+    verifie("Jam terminé" in up.message.reply_text.call_args[0][0], "/jam fin")
     q = SimpleNamespace(data=f"s|play|{'1' * 22}|1", answer=AsyncMock(), edit_message_text=AsyncMock(), message=SimpleNamespace(chat_id=77, text="x"))
     ctx = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
     await integrations.bouton_morceau(SimpleNamespace(callback_query=q, effective_user=SimpleNamespace(id=2)), ctx)
