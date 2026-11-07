@@ -171,9 +171,24 @@ def ajouter_morceau(session: Session, auteur: Personne, texte: str, http=_http) 
             definir_reglage(session, cle, str(int(reglage(session, cle) or 0) + 1))
             return f"🎵 « {piste['name']} » est déjà dans la playlist du week-end annuel."
         playlist = playlist_annuelle(session, http)
-        _api("POST", f"/playlists/{playlist}/items", {"uris": [piste["uri"]]}, http)
+        try:
+            _api("POST", f"/playlists/{playlist}/items", {"uris": [piste["uri"]]}, http)
+        except SpotifyErreur as e:
+            if e.code not in (403, 404):
+                raise
+            # playlist supprimée ou plus modifiable depuis Spotify : on l'oublie et on en recrée une
+            log.warning("Playlist %s inutilisable (%s), recréation", playlist, e)
+            definir_reglage(session, "playlist_annuelle", "")
+            playlist = playlist_annuelle(session, http)
+            _api("POST", f"/playlists/{playlist}/items", {"uris": [piste["uri"]]}, http)
     except SpotifyAbsent:
         return "Spotify n'est pas configuré."
+    except SpotifyErreur as e:
+        log.warning("Spotify : ajout refusé : %s", e)
+        if e.code == 403:
+            return (f"Spotify refuse l'ajout ({e}). Le plus probable : l'autorisation « playlist » manque ou a expiré, "
+                    "relance scripts/spotify_autoriser.py et mets le nouveau jeton dans .env.")
+        return f"Spotify refuse l'ajout ({e})."
     except Exception as e:
         return _panne(e, "Spotify ne répond pas pour l'instant : le morceau n'est pas ajouté")
     artistes = ", ".join(a["name"] for a in piste.get("artists", []))
